@@ -31,13 +31,13 @@ namespace ImportData
             // 1. Cấu hình tự khởi động cùng Windows
             SetStartup();
 
-            // 2. Thiết lập chạy ngầm: Ẩn khỏi Taskbar và chạy nhỏ thu nhỏ
-            this.ShowInTaskbar = false;
-            this.WindowState = FormWindowState.Minimized;
+            // 2. Thiết lập hiển thị Dashboard chuyên nghiệp
+            this.ShowInTaskbar = true;
+            this.WindowState = FormWindowState.Normal;
 
             // 3. Tự động quét một lần khi mở App, sau đó chuyển sang chế độ theo dõi
             this.Shown += async (s, e) => {
-                this.Hide(); 
+                Log(">>> HỆ THỐNG KHỞI CHẠY - ĐANG THEO DÕI FOLDER TASK <<<");
                 await PerformSyncAsync(); // Quét lần đầu để không sót file cũ
                 InitWatcher();            // Bắt đầu theo dõi thay đổi thực tế
             };
@@ -47,9 +47,25 @@ namespace ImportData
                 if (e.CloseReason == CloseReason.UserClosing)
                 {
                     e.Cancel = true;
-                    this.Hide();
+                    this.WindowState = FormWindowState.Minimized;
+                    Log("Ứng dụng được thu nhỏ xuống Taskbar để tiếp tục chạy ngầm.");
                 }
             };
+        }
+
+        private void Log(string message)
+        {
+            if (lstLogs.InvokeRequired)
+            {
+                lstLogs.Invoke(new Action(() => Log(message)));
+                return;
+            }
+            string time = DateTime.Now.ToString("HH:mm:ss");
+            lstLogs.Items.Add($"[{time}] {message}");
+            lstLogs.SelectedIndex = lstLogs.Items.Count - 1; // Cuộn xuống dòng cuối
+            
+            // Giới hạn 1000 dòng log để tránh tràn bộ nhớ
+            if (lstLogs.Items.Count > 1000) lstLogs.Items.RemoveAt(0);
         }
 
         private void InitWatcher()
@@ -138,9 +154,13 @@ namespace ImportData
                     string fileName = Path.GetFileName(filePath);
                     
                     // 1. Kiểm tra xem file này đã từng được Import chưa (dựa trên bảng ImportHistory trong DB)
-                    if (await IsFileImported(fileName)) continue;
+                    if (await IsFileImported(fileName)) 
+                    {
+                        Log($"Bỏ qua (đã import): {fileName}");
+                        continue;
+                    }
 
-                    lblStatus.Text = $"Đang xử lý: {fileName}";
+                    Log($"Phát hiện file mới: {fileName} - Bắt đầu xử lý...");
                     
                     // 2. Xử lý Import dữ liệu
                     bool success = await ProcessSingleFile(filePath);
@@ -149,15 +169,23 @@ namespace ImportData
                     {
                         // 3. Ghi lại lịch sử kèm theo đường dẫn file
                         await MarkFileAsImported(fileName, filePath);
+                        Log($"THÀNH CÔNG: Đã nhập dữ liệu từ file {fileName}");
                         newlyImported++;
+                    }
+                    else
+                    {
+                        Log($"THẤT BẠI: Không thể nhập dữ liệu từ file {fileName}");
                     }
                 }
 
-                lblStatus.Text = newlyImported > 0 ? $"Đồng bộ xong {newlyImported} file mới!" : "Không có file nào mới.";
+                string summary = newlyImported > 0 ? $"Đồng bộ xong {newlyImported} file mới!" : "Không có file nào mới.";
+                lblStatus.Text = summary;
+                Log($">>> {summary}");
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "Lỗi: " + ex.Message;
+                lblStatus.Text = "Lỗi hệ thống";
+                Log($"LỖI NGHIÊM TRỌNG: {ex.Message}");
             }
             finally
             {
