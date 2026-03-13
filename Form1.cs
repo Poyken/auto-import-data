@@ -377,12 +377,10 @@ namespace ImportData
         /// </summary>
         private async Task<int> ExecuteImportBatch(DataTable dt)
         {
-            // Lọc ra danh sách các dòng dữ liệu hợp lệ (VALID)
-            var validRows = dt.AsEnumerable()
-                .Where(r => r.Field<string>("Internal_Status") == "VALID")
-                .ToList();
+            // Vì dữ liệu từ máy đo/máy xuất ra Excel là tin cậy, nạp trực tiếp toàn bộ các dòng
+            var allRows = dt.AsEnumerable().ToList();
 
-            if (validRows.Count == 0) return 0;
+            if (allRows.Count == 0) return 0;
 
             int processed = 0; // Biến đếm số dòng đã chèn thành công
             
@@ -395,7 +393,7 @@ namespace ImportData
                 {
                     try
                     {
-                        foreach (var row in validRows)
+                        foreach (var row in allRows)
                         {
                             // Câu lệnh SQL Insert vào bảng chính CapacitorLogs
                             string sql = @"INSERT INTO CapacitorLogs (
@@ -487,18 +485,6 @@ namespace ImportData
                     }
                 }
 
-                // Thêm các cột trạng thái kỹ thuật để phần mềm tự kiểm soát nội bộ
-                if (!dt.Columns.Contains("Internal_Status"))
-                    dt.Columns.Add("Internal_Status", typeof(string));
-                if (!dt.Columns.Contains("Reject_Reason"))
-                    dt.Columns.Add("Reject_Reason", typeof(string));
-
-                // Thực hiện kiểm duyệt từng dòng ngay sau khi đọc xong
-                foreach (DataRow row in dt.Rows)
-                {
-                    ValidateRow(row);
-                }
-
                 return dt;
             }
             catch (Exception ex)
@@ -506,16 +492,6 @@ namespace ImportData
                 Log($"Lỗi khi đọc file Excel: {ex.Message}");
                 return null;
             }
-        }
-
-        /// <summary>
-        /// Logic kiểm tra tính hợp lệ cho dữ liệu: Hiện tại được cài đặt mặc định mọi dòng đều VALID.
-        /// Bạn có thể bổ sung các luật kiểm tra (Ví dụ: Dung lượng không được < 0...) tại đây.
-        /// </summary>
-        private void ValidateRow(DataRow row)
-        {
-            row["Internal_Status"] = "VALID";
-            row["Reject_Reason"] = "Dữ liệu hợp lệ";
         }
 
         // --- HẾT PHẦN LOGIC XỬ LÝ ---
