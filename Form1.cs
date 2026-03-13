@@ -271,11 +271,6 @@ namespace ImportData
                         Log($"[Lỗi] File {fileName} nạp thất bại.");
                     }
                 }
-
-                // Cập nhật trạng thái hiển thị trên giao diện
-                string summary = newlyImported > 0 ? $"Đã hoàn thành nạp {newlyImported} file mới!" : "Dữ liệu hiện tại đã cũ (đã nạp từ trước).";
-                lblStatus.Text = summary;
-                Log($">>> Trạng thái: {summary}");
             }
             catch (Exception ex)
             {
