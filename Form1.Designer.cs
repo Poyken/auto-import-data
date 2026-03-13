@@ -1,5 +1,7 @@
 namespace ImportData
 {
+    // Đây là file tự động tạo bởi Visual Studio Designer. 
+    // Nó chứa các khai báo và thiết lập thuộc tính cho các thành phần giao diện (UI).
     partial class Form1
     {
         private System.ComponentModel.IContainer components = null;
