@@ -13,10 +13,12 @@ namespace ImportData
     {
         // 1. Biến lưu trữ dữ liệu Excel trong bộ nhớ
         private DataTable dataToImport;
+        private FileSystemWatcher watcher;
+        private bool isProcessing = false;
 
         // 2. Cấu hình tự động
         private string connectionString = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
-        private string sourceFolder = @"c:\Users\User Vinatech.DESKTOP-RJJSEQU\Desktop\task\2026-03-11";
+        private string baseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "task");
 
 
         public Form1()
@@ -26,16 +28,99 @@ namespace ImportData
             // Đăng ký bộ mã hóa cho ExcelDataReader (Hỗ trợ .NET mới)
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
-            // 2. Tự động chạy đồng bộ ngay khi mở App
-            this.Shown += (s, e) => btnSync_Click(null, null);
+            // 1. Cấu hình tự khởi động cùng Windows
+            SetStartup();
+
+            // 2. Thiết lập chạy ngầm: Ẩn khỏi Taskbar và chạy nhỏ thu nhỏ
+            this.ShowInTaskbar = false;
+            this.WindowState = FormWindowState.Minimized;
+
+            // 3. Tự động quét một lần khi mở App, sau đó chuyển sang chế độ theo dõi
+            this.Shown += async (s, e) => {
+                this.Hide(); 
+                await PerformSyncAsync(); // Quét lần đầu để không sót file cũ
+                InitWatcher();            // Bắt đầu theo dõi thay đổi thực tế
+            };
+
+            // 4. Ngăn việc tắt ứng dụng
+            this.FormClosing += (s, e) => {
+                if (e.CloseReason == CloseReason.UserClosing)
+                {
+                    e.Cancel = true;
+                    this.Hide();
+                }
+            };
+        }
+
+        private void InitWatcher()
+        {
+            if (!Directory.Exists(baseFolder)) Directory.CreateDirectory(baseFolder);
+
+            watcher = new FileSystemWatcher(baseFolder);
+            watcher.IncludeSubdirectories = true; // Để bắt được các folder theo ngày như 2026-03-13
+            watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite;
+            watcher.Filter = "*.*";
+
+            // Sự kiện khi có file mới hoặc file bị ghi đè/thay đổi nội dung
+            watcher.Created += OnFileChanged;
+            watcher.Changed += OnFileChanged;
+            watcher.Renamed += OnFileChanged;
+
+            watcher.EnableRaisingEvents = true;
+        }
+
+        private async void OnFileChanged(object sender, FileSystemEventArgs e)
+        {
+            // Kiểm tra định dạng file
+            string ext = Path.GetExtension(e.FullPath).ToLower();
+            if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
+
+            // Kiểm tra xem có phải file nằm trong folder ngày hôm nay không
+            string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            if (!e.FullPath.Contains(todayFolder)) return;
+
+            // Tránh việc nhiều sự kiện bắn ra cùng lúc cho cùng 1 file (Debounce)
+            if (isProcessing) return;
+            
+            try 
+            {
+                isProcessing = true;
+                // Đợi một chút để file kịp giải phóng khỏi Excel hoặc quá trình copy
+                await Task.Delay(2000); 
+                await PerformSyncAsync();
+            }
+            finally 
+            {
+                isProcessing = false;
+            }
+        }
+
+        private void SetStartup()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    key.SetValue("AutoImportData", Application.ExecutablePath);
+                }
+            }
+            catch { }
         }
 
         private async void btnSync_Click(object sender, EventArgs e)
         {
-            string successFolder = Path.Combine(sourceFolder, "SUCCESS");
+            await PerformSyncAsync();
+        }
 
-            if (!Directory.Exists(sourceFolder)) return;
-            if (!Directory.Exists(successFolder)) Directory.CreateDirectory(successFolder);
+        private async Task PerformSyncAsync()
+        {
+            string sourceFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
+            
+            if (!Directory.Exists(sourceFolder))
+            {
+                lblStatus.Text = $"Chờ thư mục: {DateTime.Now:yyyy-MM-dd}";
+                return; // Chỉ thoát khỏi hàm quét, không thoát App
+            }
 
             this.UseWaitCursor = true;
             lblStatus.Text = "Đang kiểm tra thư mục...";
@@ -51,23 +136,24 @@ namespace ImportData
                 foreach (string filePath in files)
                 {
                     string fileName = Path.GetFileName(filePath);
-                    string targetPath = Path.Combine(successFolder, fileName);
+                    
+                    // 1. Kiểm tra xem file này đã từng được Import chưa (dựa trên bảng ImportHistory trong DB)
+                    if (await IsFileImported(fileName)) continue;
 
                     lblStatus.Text = $"Đang xử lý: {fileName}";
                     
-                    // Xử lý Import
+                    // 2. Xử lý Import dữ liệu
                     bool success = await ProcessSingleFile(filePath);
                     
                     if (success)
                     {
-                        // Di chuyển file sang thư mục SUCCESS để không bị quét lại
-                        if (File.Exists(targetPath)) File.Delete(targetPath); // Xóa bản cũ nếu trùng
-                        File.Move(filePath, targetPath);
+                        // 3. Ghi lại lịch sử kèm theo đường dẫn file
+                        await MarkFileAsImported(fileName, filePath);
                         newlyImported++;
                     }
                 }
 
-                lblStatus.Text = newlyImported > 0 ? $"Đồng bộ xong {newlyImported} file!" : "Không có file mới.";
+                lblStatus.Text = newlyImported > 0 ? $"Đồng bộ xong {newlyImported} file mới!" : "Không có file nào mới.";
             }
             catch (Exception ex)
             {
@@ -76,10 +162,47 @@ namespace ImportData
             finally
             {
                 this.UseWaitCursor = false;
-                
-                // Tự động đóng ứng dụng khi đã hoàn tất công việc
-                Application.Exit();
+                // Không đóng ứng dụng nữa, để vòng lặp RunSyncCycle tiếp tục
             }
+        }
+
+        private async Task<bool> IsFileImported(string fileName)
+        {
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    await conn.OpenAsync();
+                    string sql = "SELECT COUNT(*) FROM ImportHistory WHERE FileName = @name";
+                    using (SqlCommand cmd = new SqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@name", fileName);
+                        int count = (int)await cmd.ExecuteScalarAsync();
+                        return count > 0;
+                    }
+                }
+            }
+            catch { return false; } // Nếu DB chưa có bảng thì mặc định coi như chưa import
+        }
+
+        private async Task MarkFileAsImported(string fileName, string filePath)
+        {
+            try
+            {
+                using (SqlConnection conn = new SqlConnection(connectionString))
+                {
+                    await conn.OpenAsync();
+                    // Cập nhật lưu thêm đường dẫn và ngày giờ import
+                    string sql = "INSERT INTO ImportHistory (FileName, FilePath, ImportTime) VALUES (@name, @path, GETDATE())";
+                    using (SqlCommand cmd = new SqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@name", fileName);
+                        cmd.Parameters.AddWithValue("@path", filePath);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+            catch { }
         }
 
         // Xóa mã liên quan đến Table History cũ không còn dùng
