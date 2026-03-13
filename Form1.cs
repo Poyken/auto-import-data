@@ -73,7 +73,7 @@ namespace ImportData
 
             // 3. Tự động quét một lần khi mở App, sau đó chuyển sang chế độ theo dõi
             this.Shown += async (s, e) => {
-                Log(">>> HỆ THỐNG KHỞI CHẠY - ĐANG THEO DÕI FOLDER TASK <<<");
+                Log($">>> HỆ THỐNG KHỞI CHẠY - ĐANG THEO DÕI FOLDER: {baseFolder} <<<");
                 await PerformSyncAsync(); // Quét lần đầu để không sót file cũ
                 InitWatcher();            // Bắt đầu theo dõi thay đổi thực tế
             };
