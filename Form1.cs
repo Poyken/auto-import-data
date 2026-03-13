@@ -38,7 +38,7 @@ namespace ImportData
                     if (!string.IsNullOrEmpty(loadedConn)) connectionString = loadedConn;
 
                     var loadedFolder = config["FolderSettings:BaseFolder"];
-                    if (!string.IsNullOrEmpty(loadedFolder)) baseFolder = loadedFolder;
+                    if (!string.IsNullOrWhiteSpace(loadedFolder)) baseFolder = loadedFolder;
                     
                     Log("Đã tải cấu hình từ file appsettings.json thành công.");
                 }
@@ -190,11 +190,7 @@ namespace ImportData
                     string fileName = Path.GetFileName(filePath);
                     
                     // 1. Kiểm tra xem file này đã từng được Import chưa (dựa trên bảng ImportHistory trong DB)
-                    if (await IsFileImported(fileName)) 
-                    {
-                        Log($"Bỏ qua (đã import): {fileName}");
-                        continue;
-                    }
+                    if (await IsFileImported(fileName)) continue;
 
                     Log($"Phát hiện file mới: {fileName} - Bắt đầu xử lý...");
                     
