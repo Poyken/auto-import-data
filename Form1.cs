@@ -186,17 +186,48 @@ namespace ImportData
             {
                 isProcessing = true;
                 
-                // Bước 4: Chờ file được lưu hoàn tất từ các thiết bị đo (máy tính đo, copy...)
-                await Task.Delay(FILE_RELEASE_DELAY_MS); 
-                
-                // Bước 5: Thực hiện quét và đồng bộ dữ liệu
-                await PerformSyncAsync();
+                // Bước 4: Kiểm tra trạng thái file (Retry Lock 5 lần)
+                // Thay thế cho việc chờ cứng 2 giây, giúp app an toàn và chuyên nghiệp hơn
+                if (await WaitForFileReady(e.FullPath))
+                {
+                    // Bước 5: Thực hiện quét và đồng bộ dữ liệu
+                    await PerformSyncAsync();
+                }
+                else
+                {
+                    Log($"Bỏ qua file {e.Name} do đang bị tiến trình khác chiếm dụng quá lâu.");
+                }
             }
             finally 
             {
                 // Giải phóng cờ để cho phép lần xử lý tiếp theo
                 isProcessing = false;
             }
+        }
+
+        /// <summary>
+        /// Cơ chế Retry Lock: Thử mở file 5 lần, mỗi lần cách nhau 1 giây.
+        /// Tránh lỗi "File is being used by another process" khi máy đo chưa kịp đóng file.
+        /// </summary>
+        private async Task<bool> WaitForFileReady(string filePath)
+        {
+            int retryCount = 5;
+            for (int i = 0; i < retryCount; i++)
+            {
+                try
+                {
+                    using (FileStream stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                    {
+                        return true; // File đã sẵn sàng để đọc
+                    }
+                }
+                catch (IOException)
+                {
+                    // Nếu lỗi do file đang bị lock, chờ 1 giây rồi thử lại
+                    await Task.Delay(1000);
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -368,62 +399,57 @@ namespace ImportData
         }
 
         /// <summary>
-        /// Chèn dữ liệu từ bảng DataTable vào Database sử dụng Transaction (đảm bảo tính toàn vẹn)
+        /// Chèn dữ liệu cực nhanh vào SQL Server bằng công nghệ SqlBulkCopy.
+        /// Tốc độ xử lý hàng chục nghìn dòng chỉ trong chưa đầy 1 giây.
         /// </summary>
         private async Task<int> ExecuteImportBatch(DataTable dt)
         {
-            // Vì dữ liệu từ máy đo/máy xuất ra Excel là tin cậy, nạp trực tiếp toàn bộ các dòng
-            var allRows = dt.AsEnumerable().ToList();
+            if (dt == null || dt.Rows.Count == 0) return 0;
 
-            if (allRows.Count == 0) return 0;
-
-            int processed = 0; // Biến đếm số dòng đã chèn thành công
-            
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 await conn.OpenAsync();
-                
-                // Sử dụng Transaction: Nếu một dòng bị lỗi, toàn bộ file sẽ không được nạp (tránh rác dữ liệu)
                 using (SqlTransaction trans = conn.BeginTransaction())
                 {
                     try
                     {
-                        foreach (var row in allRows)
+                        // Chuẩn bị dữ liệu: Chúng ta cần một DataTable khớp hoàn toàn với cấu trúc SQL
+                        // để SqlBulkCopy có thể thực hiện ánh xạ tự động.
+                        using (SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
-                            // Câu lệnh SQL Insert vào bảng chính CapacitorLogs
-                            string sql = @"INSERT INTO CapacitorLogs (
-                                EquipmentNumber, SorterNum, StartTime, WorkflowCode, LotNo, 
-                                Barcode, Slot, Position, Channel, Capacity_mAh, 
-                                Capacitance_F, BeginVoltageSD_mV, ChargeEndCurrent_mA, EndVoltage_mV, EndCurrent_mA, 
-                                DischargeVoltage1_mV, DischargeVal1_Time, DischargeVoltage2_mV, DischargeVal2_Time, DischargeBeginVoltage_mV, 
-                                DischargeBeginCurrent_mA, NGInfo, EndTime) 
-                                VALUES (@c0, @c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9, @c10, @c11, @c12, @c13, @c14, @c15, @c16, @c17, @c18, @c19, @c20, @c21, @c22)";
+                            bulkCopy.DestinationTableName = "CapacitorLogs";
+                            
+                            // Ánh xạ các cột từ Excel vào bảng SQL (Cột 0 -> Cột 22)
+                            // Lưu ý: Cột Id trong SQL là tự tăng nên chúng ta không ánh xạ.
+                            string[] sqlColumns = {
+                                "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo", 
+                                "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", 
+                                "Capacitance_F", "BeginVoltageSD_mV", "ChargeEndCurrent_mA", "EndVoltage_mV", "EndCurrent_mA", 
+                                "DischargeVoltage1_mV", "DischargeVal1_Time", "DischargeVoltage2_mV", "DischargeVal2_Time", "DischargeBeginVoltage_mV", 
+                                "DischargeBeginCurrent_mA", "NGInfo", "EndTime"
+                            };
 
-                            using (SqlCommand cmd = new SqlCommand(sql, conn, trans))
+                            for (int i = 0; i < 23; i++)
                             {
-                                // Ánh xạ 23 cột dữ liệu từ file Excel vào các tham số SQL ứng với tên @c0 -> @c22
-                                for (int i = 0; i < 23; i++)
-                                {
-                                    MapParameter(cmd, i, row[i]);
-                                }
-                                await cmd.ExecuteNonQueryAsync();
+                                // Ánh xạ vị trí cột trong DataTable (i) vào tên cột trong SQL
+                                bulkCopy.ColumnMappings.Add(i, sqlColumns[i]);
                             }
-                            processed++;
+
+                            // Thực hiện đẩy toàn bộ dữ liệu lên Server trong một lệnh duy nhất
+                            await bulkCopy.WriteToServerAsync(dt);
                         }
-                        
-                        // Nếu chạy hết mọi dòng mà không có lỗi thì mới chính thức ghi vào Disk
+
                         trans.Commit();
+                        return dt.Rows.Count;
                     }
                     catch (Exception ex)
                     {
-                        // Hủy bỏ toàn bộ các dòng nạp dở nếu có bất kỳ lỗi nào phát sinh
                         trans.Rollback();
-                        Log($"Lỗi Transaction (Ghi dữ liệu): {ex.Message}");
-                        throw; 
+                        Log($"Lỗi BulkCopy (Ghi dữ liệu): {ex.Message}");
+                        throw;
                     }
                 }
             }
-            return processed;
         }
 
         /// <summary>
