@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using Microsoft.Win32; // Cho phép can thiệp vào Registry để khởi động cùng Windows
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Configuration;
 
 namespace ImportData
 {
@@ -16,9 +17,41 @@ namespace ImportData
         private FileSystemWatcher watcher;
         private bool isProcessing = false;
 
-        // 2. Cấu hình tự động
+        // 2. Cấu hình (Sẽ được load từ appsettings.json)
         private string connectionString = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
         private string baseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "task");
+
+        private void LoadSettings()
+        {
+            try
+            {
+                string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                if (File.Exists(settingsPath))
+                {
+                    var builder = new ConfigurationBuilder()
+                        .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                        .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+                    var config = builder.Build();
+
+                    var loadedConn = config.GetConnectionString("DefaultConnection");
+                    if (!string.IsNullOrEmpty(loadedConn)) connectionString = loadedConn;
+
+                    var loadedFolder = config["FolderSettings:BaseFolder"];
+                    if (!string.IsNullOrEmpty(loadedFolder)) baseFolder = loadedFolder;
+                    
+                    Log("Đã tải cấu hình từ file appsettings.json thành công.");
+                }
+                else
+                {
+                    Log("Không tìm thấy appsettings.json, sử dụng cấu hình mặc định.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Lỗi khi tải cấu hình: {ex.Message}");
+            }
+        }
 
 
         public Form1()
@@ -27,6 +60,9 @@ namespace ImportData
             
             // Đăng ký bộ mã hóa cho ExcelDataReader (Hỗ trợ .NET mới)
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+            // Tải cấu hình bên ngoài
+            LoadSettings();
 
             // 1. Cấu hình tự khởi động cùng Windows
             SetStartup();
