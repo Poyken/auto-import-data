@@ -26,6 +26,9 @@ namespace ImportData
         private string _lastState = "";
         private bool _isSystemHealthy = false;
 
+        // --- HỆ THỐNG SYSTEM TRAY (CHẠY NGẦM) ---
+        private NotifyIcon _trayIcon;
+
         public Form1()
         {
             InitializeComponent();
@@ -41,6 +44,20 @@ namespace ImportData
             _excelService = new ExcelService(Log);
 
             SystemHelper.SetStartup(Log);
+
+            // Cấu hình Icon chạy ngầm ở góc dưới màn hình (Không có menu để cấm thoát)
+            _trayIcon = new NotifyIcon()
+            {
+                Icon = SystemIcons.Information,
+                Text = "Hệ thống Import Data (Đang chạy ngầm)",
+                Visible = true
+            };
+
+            // Nháy đúp chuột để mở lại cửa sổ
+            _trayIcon.DoubleClick += (s, e) => {
+                this.Show();
+                this.WindowState = FormWindowState.Normal;
+            };
 
             this.ShowInTaskbar = true;
             this.WindowState = FormWindowState.Normal;
@@ -133,8 +150,12 @@ namespace ImportData
             if (e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true; 
-                this.WindowState = FormWindowState.Minimized;
-                Log("Ứng dụng đang chạy ngầm trên thanh Taskbar.");
+                this.Hide(); // Ẩn hẳn Form, không để dính trên Taskbar nữa
+                
+                // Hiển thị bong bóng thông báo góc System Tray
+                _trayIcon.ShowBalloonTip(3000, "Thông báo", "Ứng dụng vẫn đang chạy ngầm để nạp dữ liệu.", ToolTipIcon.Info);
+                
+                Log("Đã thu nhỏ ứng dụng xuống khay hệ thống (System Tray).");
             }
         }
 
