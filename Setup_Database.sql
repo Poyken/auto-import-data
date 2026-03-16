@@ -30,8 +30,8 @@ BEGIN
         [LotNo] [nvarchar](100) NULL,                -- Số lô sản xuất (Lot)
         [Barcode] [nvarchar](100) NULL,              -- Mã vạch sản phẩm
         [Slot] [nvarchar](50) NULL,                  -- Vị trí khay (Slot)
-        [Position] [int] NULL,                       -- Vị trí trong khay
-        [Channel] [int] NULL,                        -- Kênh kiểm tra
+        [Position] [nvarchar](50) NULL,              -- Vị trí trong khay (ví dụ: 01-04)
+        [Channel] [nvarchar](50) NULL,               -- Kênh kiểm tra (ví dụ: 01-04)
         [Capacity_mAh] [float] NULL,                 -- Dung lượng (mAh)
         [Capacitance_F] [float] NULL,                -- Điện dung (F)
         [BeginVoltageSD_mV] [float] NULL,            -- Điện áp bắt đầu SD (mV)
@@ -39,9 +39,9 @@ BEGIN
         [EndVoltage_mV] [float] NULL,                -- Điện áp kết thúc (mV)
         [EndCurrent_mA] [float] NULL,                -- Dòng điện kết thúc (mA)
         [DischargeVoltage1_mV] [float] NULL,         -- Điện áp xả lần 1 (mV)
-        [DischargeVal1_Time] [nvarchar](20) NULL,    -- Thời gian xả lần 1
+        [DischargeVal1_Time] [nvarchar](50) NULL,    -- Thời gian xả lần 1
         [DischargeVoltage2_mV] [float] NULL,         -- Điện áp xả lần 2 (mV)
-        [DischargeVal2_Time] [nvarchar](20) NULL,    -- Thời gian xả lần 2
+        [DischargeVal2_Time] [nvarchar](50) NULL,    -- Thời gian xả lần 2
         [DischargeBeginVoltage_mV] [float] NULL,     -- Điện áp bắt đầu xả
         [DischargeBeginCurrent_mA] [float] NULL,     -- Dòng điện bắt đầu xả
         [NGInfo] [nvarchar](max) NULL,               -- Thông tin lỗi (nếu có)
