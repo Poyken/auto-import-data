@@ -72,3 +72,29 @@ END
 GO
 
 PRINT 'Hoan thanh khoi tao Database va Table voi day du comment!';
+
+
+-----------------------------------------------------------
+-- 1. THÊM CỘT [LotNo] VÀO BẢNG CapacitorLogs (NẾU CHƯA CÓ)
+-- Để khớp với dữ liệu lô sản xuất từ máy đo mẫu mới
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CapacitorLogs') AND name = 'LotNo')
+BEGIN
+    ALTER TABLE CapacitorLogs ADD [LotNo] [nvarchar](100) NULL;
+    PRINT 'Da them cot LotNo thanh cong.';
+END
+
+-- 2. TẠO BẢNG [ImportHistory] ĐỂ QUẢN LÝ LỊCH SỬ NẠP FILE
+-- Đảm bảo App nhận diện được file nào đã nạp rồi, tránh nạp trùng dữ liệu
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ImportHistory]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[ImportHistory](<
+        [Id] [int] IDENTITY(1,1>) PRIMARY KEY,
+        [FileName] [nvarchar](500) UNIQUE,
+        [FilePath] [nvarchar](max) NULL,
+        [ImportTime] [datetime] DEFAULT GETDATE()
+    );
+    PRINT 'Da tao bang ImportHistory thanh cong.';
+END
+GO
+
+PRINT '>>> KET THUC: Database da du dieu kien de chay App moi! <<<';
