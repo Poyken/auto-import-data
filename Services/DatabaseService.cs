@@ -64,29 +64,11 @@ namespace ImportData.Services
             } 
         }
 
-        public async Task MarkFileAsImportedAsync(string fileName, string filePath)
-        {
-            try
-            {
-                using (SqlConnection conn = new SqlConnection(_config.ConnectionString))
-                {
-                    await conn.OpenAsync();
-                    string sql = "INSERT INTO ImportHistory (FileName, FilePath, ImportTime) VALUES (@name, @path, GETDATE())";
-                    using (SqlCommand cmd = new SqlCommand(sql, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@name", fileName);
-                        cmd.Parameters.AddWithValue("@path", filePath);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.Invoke($"Lỗi lưu lịch sử (Database): {ex.Message}");
-            }
-        }
 
-        public async Task<int> ExecuteImportBatchAsync(DataTable dt)
+        /// <summary>
+        /// Thực hiện nạp dữ liệu lô lớn và ghi nhật ký vào cùng một Transaction (Tính toàn vẹn 100%)
+        /// </summary>
+        public async Task<int> ExecuteImportBatchAsync(DataTable dt, string fileName, string filePath)
         {
             if (dt == null || dt.Rows.Count == 0) return 0;
 
@@ -97,6 +79,7 @@ namespace ImportData.Services
                 {
                     try
                     {
+                        // 1. Thực hiện BulkCopy dữ liệu Logs
                         using (SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
                             bulkCopy.DestinationTableName = "CapacitorLogs";
@@ -117,13 +100,23 @@ namespace ImportData.Services
                             await bulkCopy.WriteToServerAsync(dt);
                         }
 
+                        // 2. Ghi nhật ký File đã nạp (Sử dụng cùng Connection và Transaction)
+                        string sql = "INSERT INTO ImportHistory (FileName, FilePath, ImportTime) VALUES (@name, @path, GETDATE())";
+                        using (SqlCommand cmd = new SqlCommand(sql, conn, trans))
+                        {
+                            cmd.Parameters.AddWithValue("@name", fileName);
+                            cmd.Parameters.AddWithValue("@path", filePath);
+                            await cmd.ExecuteNonQueryAsync();
+                        }
+
+                        // 3. Nếu mọi thứ suôn sẻ thì mới lưu vĩnh viễn
                         trans.Commit();
                         return dt.Rows.Count;
                     }
                     catch (Exception ex)
                     {
                         trans.Rollback();
-                        _logger?.Invoke($"Lỗi BulkCopy (Ghi dữ liệu): {ex.Message}");
+                        _logger?.Invoke($"[LỖI TRANSACTION] Giao dịch nạp file {fileName} bị hủy: {ex.Message}");
                         throw;
                     }
                 }

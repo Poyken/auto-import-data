@@ -356,13 +356,8 @@ namespace ImportData
                 var dataTable = _excelService.ReadExcelFile(filePath);
                 if (dataTable == null || dataTable.Rows.Count == 0) return false;
 
-                int rowsImported = await _dbService.ExecuteImportBatchAsync(dataTable);
-                if (rowsImported > 0)
-                {
-                    await _dbService.MarkFileAsImportedAsync(fileName, filePath);
-                    return true;
-                }
-                return false;
+                int rowsImported = await _dbService.ExecuteImportBatchAsync(dataTable, fileName, filePath);
+                return rowsImported > 0;
             }
             catch (Exception ex)
             {
