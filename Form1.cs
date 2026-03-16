@@ -82,8 +82,11 @@ namespace ImportData
 
         private async Task PerformHealthCheckLoopAsync()
         {
+            // Lưu lại folder cũ trước khi nạp config mới để so sánh
+            string oldFolder = _config.BaseFolder;
+
             // Nạp lại cấu hình (Hot Reload)
-            _config.Load(null); // Không truyền tham số Log để tránh spam
+            _config.Load(null); 
 
             string currentState = "HEALTHY";
             bool currentPathOk = true;
@@ -105,7 +108,15 @@ namespace ImportData
 
             _isSystemHealthy = currentPathOk && currentDbOk;
 
-            // Xử lý báo Log khi chuyển trạng thái (tránh spam)
+            // TRƯỜNG HỢP 1: Cấu hình Folder bị thay đổi trực tiếp trong file JSON (Dù vẫn đang Healthy)
+            if (_isSystemHealthy && oldFolder != _config.BaseFolder)
+            {
+                Log($"[THAY ĐỔI] Phát hiện đường dẫn mới: {_config.BaseFolder}");
+                InitWatcher(); // Khởi động lại Watcher ở folder mới
+                await PerformSyncAsync(); // Quét bù file ở folder mới này
+            }
+
+            // TRƯỜNG HỢP 2: Chuyển đổi trạng thái (Lỗi <-> Sẵn sàng)
             if (currentState != _lastState)
             {
                 if (_isSystemHealthy)
@@ -114,11 +125,11 @@ namespace ImportData
                     UpdateStatus("Hệ thống Sẵn sàng", Color.Green);
                     
                     InitWatcher();
-                    await PerformSyncAsync();
+                    await PerformSyncAsync(); // Quét bù dữ liệu khi vừa có mạng lại
                 }
                 else
                 {
-                    StopWatcher(); // Dừng quét file khi có lỗi
+                    StopWatcher(); // Dừng quét file khi có lỗi để tiết kiệm tài nguyên
                     
                     if (!currentPathOk)
                     {
@@ -161,6 +172,11 @@ namespace ImportData
 
         private void UpdateStatus(string message, Color color)
         {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => UpdateStatus(message, color)));
+                return;
+            }
             lblStatus.Text = message;
             lblStatus.ForeColor = color;
         }
@@ -233,8 +249,10 @@ namespace ImportData
 
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
+            // CHỈ CHẤP NHẬN FILE TRONG THƯ MỤC NGÀY HÔM NAY (Theo yêu cầu: Chỉ tính hôm nay)
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
-            if (!e.FullPath.Contains(todayFolder)) return;
+            string folderName = Path.GetFileName(Path.GetDirectoryName(e.FullPath));
+            if (folderName != todayFolder) return;
 
             if (_isProcessing) return;
             
@@ -278,18 +296,18 @@ namespace ImportData
 
         private async Task PerformSyncAsync()
         {
-            if (!_isSystemHealthy) return; // Bảo vệ: Không đồng bộ khi lỗi
+            if (!_isSystemHealthy) return; 
 
-            string sourceFolder = Path.Combine(_config.BaseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
+            string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            string sourceFolder = Path.Combine(_config.BaseFolder, todayFolder);
             
             if (!Directory.Exists(sourceFolder))
             {
-                UpdateStatus($"Đang chờ thư mục: {DateTime.Now:yyyy-MM-dd}", lblStatus.ForeColor);
+                UpdateStatus($"Hệ thống Sẵn sàng (Đang chờ folder: {todayFolder})", Color.Green);
                 return;
             }
 
-            this.UseWaitCursor = true;
-            UpdateStatus("Hệ thống đang đồng bộ...", lblStatus.ForeColor);
+            UpdateStatus("Đang kiểm tra dữ liệu hôm nay...", Color.Yellow);
 
             try
             {
@@ -323,10 +341,12 @@ namespace ImportData
                 UpdateStatus("Lỗi đồng bộ dữ liệu", Color.Red);
                 Log($"LỖI ĐỒNG BỘ: {ex.Message}");
             }
-            finally
-            {
-                this.UseWaitCursor = false;
-            }
+        }
+
+        private bool IsValidDateFolder(string folderName)
+        {
+            if (string.IsNullOrEmpty(folderName)) return false;
+            return System.Text.RegularExpressions.Regex.IsMatch(folderName, @"^\d{4}-\d{2}-\d{2}$");
         }
 
         private async Task<bool> ProcessSingleFileAsync(string filePath, string fileName)
