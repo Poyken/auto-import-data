@@ -1,18 +1,18 @@
-using ExcelDataReader;
-using System;
-using System.Data;
-using System.IO;
+using ExcelDataReader; // Gọi thư viện bên thứ 3 (phải cài tự động từ Nuget) chuyên xử lý file Excel độc lập.
+using System;          // Gọi thư viện căn bản của C# (Ví dụ: kiểm duyệt Null, chuỗi).
+using System.Data;     // Gọi thư viện tổ chức dữ liệu dạng bảng lưới chuẩn mực (DataTable).
+using System.IO;       // Gọi thư viện dùng để tương tác tệp (File, Thư mục) thông qua hệ điều hành.
 
-namespace ImportData.Services
+namespace ImportData.Services 
 {
     /// <summary>
-    /// Service chuyên xử lý logic liên quan đến file Excel
+    /// Lớp ExcelService: Đóng vai trò đọc lấy nội dung của file Excel (máy đo sinh ra) và đưa lên bảng dữ liệu mềm của C# (DataTable).
     /// </summary>
     public class ExcelService
     {
-        private readonly Action<string> _logger;
+        private readonly Action<string> _logger; // Biến truyền nhắn log gởi tin về Form màn hình.
 
-        // Cấu trúc tiêu đề cột mong đợi từ máy đo (Đã thêm LotNo theo yêu cầu người dùng)
+        // Mảng Tên 23 cột bắt buộc phải tồn tại trong file excel máy xuất (Lưu ý: Mới bổ sung thêm cột "LotNo").
         private static readonly string[] RequiredHeaders = {
             "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo",
             "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", "Capacitance_F", 
@@ -21,66 +21,88 @@ namespace ImportData.Services
             "NGInfo", "EndTime"
         };
 
+        // Hàm khởi tạo, khi hệ thống bật lên, ta cấu hình lại Encoding.
         public ExcelService(Action<string> logger)
         {
-            _logger = logger;
+            _logger = logger; 
+            
+            // Một số bản .NET hiện hành đã chặn hỗ trợ bảng mã ASCII hoặc ISO quá cũ của những tệp .xls ngày xưa. 
+            // RegisterProvider khắc phục lệnh khuyết này cho hệ thống app C# chúng ta quét được luôn những tệp xuất từ cỗ máy đo dòng đời rớt lâu.
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         }
 
+        /// <summary>
+        /// Hàm tiếp nhận một đường truyền File (filePath) để xử lý giải mã nội dung file Excel thành dạng DataTable lưới trên RAM.
+        /// </summary>
         public DataTable ReadExcelFile(string filePath)
         {
-            try
+            try 
             {
-                DataTable dt;
+                DataTable dt; // Biến nhận bảng dữ liệu lấy được.
                 
+                // Mở luồng đọc file bằng quyền chia sẻ (FileShare.ReadWrite): 
+                // Quan trọng: Máy đo liên tục ghi dữ liệu vài lần nên file Excel thường bị hệ điều hành 'Khóa lại'. 
+                // Bằng việc gởi cờ chia sẻ 'ReadWrite' ở đây, Windows vẫn cấp cho tệp chúng ta thẩm quyền được xem, được đọc dù máy đo vẫn đang mở sửa bên dưới nền.  
                 using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
+                    // Chuyển dòng dữ liệu file cho công cụ ExcelDataReader đọc (nó rất thông minh sẽ hiểu cả .xls hay .xlsx).
                     using (var reader = ExcelReaderFactory.CreateReader(stream))
                     {
-                        var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                        var result = reader.AsDataSet(new ExcelDataSetConfiguration() 
                         {
+                            // Đánh dấu thiết lập bắt thư viện chuyển dòng 1 của File làm Tên các Cột Thay vì nhận dạng là một dòng Data chứa biến đếm.
                             ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = true }
                         });
-                        dt = result.Tables[0];
-                    }
-                }
+                        dt = result.Tables[0]; // Chỉ thu lại duy nhất Sheet đầu tiên (Vị trí 0) làm khung làm việc chính thức cho mã. Lướt qua sheet thừa (vd sheet2, sheet3 nếu có).
+                    } 
+                } 
 
-                if (dt != null)
+                if (dt != null) 
                 {
-                    // 1. KIỂM TRA CẤU TRÚC CỘT
+                    // 1. Kiểm duyệt thông số cột (Validate Headers) trước khi đổ số vào cơ sở dữ liệu.
+                    // Loại trừ việc bản nâng cấp máy đo vô tình xuất rớt 1 cột đi (Tạo lỗi cột lệch vào SQL).  
                     if (!ValidateHeaders(dt))
                     {
-                        _logger?.Invoke($"[LỖI CẤU TRÚC] File {Path.GetFileName(filePath)} không đúng định dạng cột yêu cầu.");
-                        return null;
+                        _logger?.Invoke($"[LỖI TẠO CẤU TRÚC CHI TIẾT] File {Path.GetFileName(filePath)} bị hao hụt mảng cột dữ liệu hoặc không khớp mẫu gốc. Từ Chối Nạp Tệp."); 
+                        return null; // Tải hàm trả File khuyết để SQL Service không chạm tới file này.
                     }
 
-                    // 2. TIỀN XỬ LÝ (DATA CLEANSING)
-                    foreach (DataRow row in dt.Rows)
+                    // 2. Tinh Xử Lý Dữ Liệu Chống Lỗi (Data Cleansing) - Bẩn giá trị
+                    foreach (DataRow row in dt.Rows) // Truy vấn trên mỗi dòng dữ liệu...
                     {
-                        for (int i = 0; i < dt.Columns.Count; i++)
+                        for (int i = 0; i < dt.Columns.Count; i++) // Và di qua các cột đo bên trong hàng...
                         {
-                            var cellValue = row[i];
-                            if (cellValue == null || string.IsNullOrWhiteSpace(cellValue.ToString()) || cellValue.ToString() == "---")
+                            var cellValue = row[i]; // Lấy giá trị từng điểm đo lưu vào cellValue.
+                            
+                            // Một số máy đo xả một giá trị khuyết đặc biệt báo lỗi ví dụ chuỗi có ký hiệu "---" (Trống tính điện) hoặc bị mất giá trị nhị phân null.
+                            if (cellValue == null || string.IsNullOrWhiteSpace(cellValue.ToString()) || cellValue.ToString() == "---") 
                             {
-                                row[i] = DBNull.Value;
+                                // Sẽ bị gán cho biến giá trị 'Khuyết Hệ Thống' DBNull.Value.
+                                // SQL rất cần một Null gốc làm chuẩn này thay vì phải đọc được cụm chữ "---" trong cột Number gây phát sập lỗi.
+                                row[i] = DBNull.Value; 
                             }
                         }
-                    }
+                    } 
                 }
 
-                return dt;
+                return dt; // Trả về dạng khung dữ liệu lưới DataTable hoàn thiện không còn chứa các biến khuyết hư cho phép để gới lên SQL Nạp Data..
             }
-            catch (Exception ex)
+            catch (Exception ex) 
             {
-                _logger?.Invoke($"Lỗi khi đọc file Excel: {ex.Message}");
-                return null;
+                // Bắt nếu file có mật khẩu bị Zip che hoặc lỗi phần Cấu Trúc Đọc Thẻ. Cảnh log bảo Màn. 
+                _logger?.Invoke($"Lỗi bất thường đọc phần dịch thuật thẻ Excel hoặc file cấu trúc bị hỏng mã: {ex.Message}"); 
+                return null; 
             }
         }
 
+        // Kiểm định và bảo mật tính toàn vẹn Số Cột của Bảng Lưới Excel Đo lấy ra:
         private bool ValidateHeaders(DataTable dt)
         {
-            if (dt == null) return false;
-            // Kiểm tra số lượng cột tối thiểu (22 cột)
+            if (dt == null) return false; 
+            
+            // Logic >= có nghĩa Cột sinh ra nếu chẳng may có chứa 1 cột nhảm ở phía ngoài rìa màn > 23 cột. 
+            // C# không xem là Lỗi vì nó lúc sau sẽ cắt và map vừa khít lấy 23 cột này đẩy lên SQL.  
+            // Chỉ khi Cột máy Xuất đưa ra dưới 23 (Tức là đang đánh mất 1 cột thiết yếu) code mới thả False chặn!
             return dt.Columns.Count >= RequiredHeaders.Length;
         }
     }

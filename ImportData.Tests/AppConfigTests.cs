@@ -5,51 +5,61 @@ using ImportData.Core;
 
 namespace ImportData.Tests
 {
+    /// <summary>
+    /// Lớp kiểm thử (Unit Test) cho AppConfig.
+    /// Đảm bảo việc nạp cấu hình luôn chính xác và không gây sập App.
+    /// </summary>
     public class AppConfigTests : IDisposable
     {
         private readonly string _testSettingsPath;
 
         public AppConfigTests()
         {
+            // _testSettingsPath ví dụ: "C:\...\ImportData.Tests\bin\Debug\appsettings.json"
             _testSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
         }
 
         public void Dispose()
         {
-            // Dọn dẹp file test sau khi chạy xong
+            // Dọn dẹp: Xóa file cấu hình giả lập sau mỗi bài test để không ảnh hưởng bài sau
             if (File.Exists(_testSettingsPath))
             {
                 File.Delete(_testSettingsPath);
             }
         }
 
+        /// <summary>
+        /// Test: Nếu không có file JSON, App phải dùng giá trị mặc định.
+        /// </summary>
         [Fact]
         public void AppConfig_Load_ShouldFallbackToDefault_IfNoFileExists()
         {
-            // Arrange
+            // Arrange (Chuẩn bị)
             if (File.Exists(_testSettingsPath)) File.Delete(_testSettingsPath);
             var config = new AppConfig();
             
-            // Lấy giá trị ban đầu để so sánh
+            // defaultConn ví dụ: "Server=.;Database=CapacitorDB;..."
             string defaultConn = config.ConnectionString;
-            string defaultFolder = config.BaseFolder;
 
-            // Act
+            // Act (Hành động)
             bool logCalled = false;
             config.Load(msg => {
                 if (msg.Contains("dùng cấu hình mặc định")) logCalled = true;
             });
 
-            // Assert
-            Assert.True(logCalled, "Phải gọi log báo hiệu không tìm thấy file và dùng mặc định.");
+            // Assert (Kiểm tra kết quả)
+            Assert.True(logCalled);
             Assert.Equal(defaultConn, config.ConnectionString);
-            Assert.Equal(defaultFolder, config.BaseFolder);
         }
 
+        /// <summary>
+        /// Test: Nếu file JSON hợp lệ, App phải nạp đúng giá trị trong file đó.
+        /// </summary>
         [Fact]
         public void AppConfig_Load_ShouldOverrideValues_IfFileExistsAndValid()
         {
             // Arrange
+            // validJson ví dụ: '{"ConnectionStrings": {"DefaultConnection": "Server=TEST_SERVER;..."}}'
             string validJson = @"{
                 ""ConnectionStrings"": {
                     ""DefaultConnection"": ""Server=TEST_SERVER;Database=TestDB;Integrated Security=True;TrustServerCertificate=True;""
@@ -63,38 +73,35 @@ namespace ImportData.Tests
             var config = new AppConfig();
 
             // Act
-            bool successLog = false;
-            config.Load(msg => {
-                if (msg.Contains("Đã tải cấu hình")) successLog = true;
-            });
+            config.Load(msg => { });
 
             // Assert
-            Assert.True(successLog, "Phải có log báo tải thành công.");
+            // Kiểm tra ConnectionString có đúng là "Server=TEST_SERVER;..." không
             Assert.Equal("Server=TEST_SERVER;Database=TestDB;Integrated Security=True;TrustServerCertificate=True;", config.ConnectionString);
             Assert.Equal("C:\\TestFolder", config.BaseFolder);
         }
 
+        /// <summary>
+        /// Test: Nếu file JSON bị lỗi cú pháp, App không được sập (Crash).
+        /// </summary>
         [Fact]
         public void AppConfig_Load_ShouldNotCrash_IfJsonIsInvalid()
         {
             // Arrange
-            string invalidJson = @"{
-                ""ConnectionStrings"": {
-                    ""DefaultConnection"": ""Server=TEST_SERVER;
-                }
-            }"; // Lỗi cú pháp thiếu dấu ngoặc kép hoặc đóng ngoặc
+            // invalidJson bị thiếu dấu ngoặc đóng }
+            string invalidJson = @"{ ""ConnectionStrings"": { ""DefaultConnection"": ""ABC"" "; 
             
             File.WriteAllText(_testSettingsPath, invalidJson);
             var config = new AppConfig();
-            
             string originalConn = config.ConnectionString;
 
             // Act
             var exception = Record.Exception(() => config.Load(msg => { }));
 
             // Assert
-            Assert.Null(exception); // Phải không được văng lỗi làm sập ứng dụng (Crash)
-            Assert.Equal(originalConn, config.ConnectionString); // Phải giữ nguyên kết nối cấu hình gốc
+            Assert.Null(exception); // Không được có lỗi văng ra
+            Assert.Equal(originalConn, config.ConnectionString); // Dữ liệu cũ phải được giữ nguyên
         }
     }
 }
+

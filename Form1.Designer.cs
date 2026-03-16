@@ -1,11 +1,16 @@
 namespace ImportData
 {
-    // Đây là file tự động tạo bởi Visual Studio Designer. 
-    // Nó chứa các khai báo và thiết lập thuộc tính cho các thành phần giao diện (UI).
+    /// <summary>
+    /// File thiết kế giao diện (Tự động tạo bởi Visual Studio).
+    /// Chứa các thiết lập về kích thước, màu sắc và thuộc tính của các Control trên Form.
+    /// </summary>
     partial class Form1
     {
         private System.ComponentModel.IContainer components = null;
 
+        /// <summary>
+        /// Giải phóng bộ nhớ khi Form bị đóng.
+        /// </summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -17,6 +22,10 @@ namespace ImportData
 
         #region Windows Form Designer generated code
 
+        /// <summary>
+        /// Khởi tạo các thành phần giao diện.
+        /// Cấu hình Layout, Font chữ và màu sắc Matrix (Đen - Xanh lá).
+        /// </summary>
         private void InitializeComponent()
         {
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
@@ -25,7 +34,7 @@ namespace ImportData
             this.statusStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
-            // statusStrip1
+            // statusStrip1 (Thanh trạng thái dưới cùng)
             // 
             this.statusStrip1.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -36,14 +45,14 @@ namespace ImportData
             this.statusStrip1.TabIndex = 0;
             this.statusStrip1.Text = "statusStrip1";
             // 
-            // lblStatus
+            // lblStatus (Nhãn hiển thị trạng thái OK/Lỗi)
             // 
             this.lblStatus.ForeColor = System.Drawing.Color.White;
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(115, 17);
             this.lblStatus.Text = "Hệ thống sẵn sàng";
             // 
-            // lstLogs
+            // lstLogs (Bảng hiển thị Nhật ký hoạt động)
             // 
             this.lstLogs.BackColor = System.Drawing.Color.Black;
             this.lstLogs.BorderStyle = System.Windows.Forms.BorderStyle.None;
@@ -58,7 +67,7 @@ namespace ImportData
             this.lstLogs.Size = new System.Drawing.Size(784, 419);
             this.lstLogs.TabIndex = 1;
             // 
-            // Form1
+            // Form1 (Thiết lập cửa sổ chính)
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -82,3 +91,4 @@ namespace ImportData
         private System.Windows.Forms.ListBox lstLogs;
     }
 }
+
