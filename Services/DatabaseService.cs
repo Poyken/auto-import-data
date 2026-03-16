@@ -79,20 +79,29 @@ namespace ImportData.Services
                 {
                     try
                     {
-                        // 1. Thực hiện BulkCopy dữ liệu Logs
+                        // Thêm các cột phụ để khớp với bảng thực tế (Hình ảnh TURN 11:02)
+                        dt.Columns.Add("FilePath", typeof(string));
+                        dt.Columns.Add("ImportDate", typeof(DateTime));
+                        foreach (DataRow row in dt.Rows)
+                        {
+                            row["FilePath"] = filePath;
+                            row["ImportDate"] = DateTime.Now;
+                        }
+
                         using (SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
                             bulkCopy.DestinationTableName = "CapacitorLogs";
                             
+                            // Danh sách cột khớp chính xác thứ tự và tên trong hình ảnh DB và LotNo người dùng thêm
                             string[] sqlColumns = {
-                                "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo", 
-                                "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", 
-                                "Capacitance_F", "BeginVoltageSD_mV", "ChargeEndCurrent_mA", "EndVoltage_mV", "EndCurrent_mA", 
-                                "DischargeVoltage1_mV", "DischargeVal1_Time", "DischargeVoltage2_mV", "DischargeVal2_Time", "DischargeBeginVoltage_mV", 
-                                "DischargeBeginCurrent_mA", "NGInfo", "EndTime"
+                                "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo",
+                                "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", "Capacitance_F", 
+                                "BeginVoltageSD_mV", "ChargeEndCurrent_mA", "EndVoltage_mV", "EndCurrent_mA", "DischargeVoltage1_mV", 
+                                "DischargeVoltage1_Time", "DischargeVoltage2_mV", "DischargeVoltage2_Time", "DischargeBeginVoltage_mV", "DischargeBeginCurrent_mA", 
+                                "NGInfo", "EndTime", "FilePath", "ImportDate"
                             };
 
-                            for (int i = 0; i < 23; i++)
+                            for (int i = 0; i < sqlColumns.Length; i++)
                             {
                                 bulkCopy.ColumnMappings.Add(i, sqlColumns[i]);
                             }
