@@ -1,12 +1,12 @@
-using System;                  // Gọi thư viện cơ bản của C# (Ví dụ: xử lý biến hệ thống, DateTime, Exception).
-using System.IO;               // Gọi thư viện tương tác hệ điều hành để quản lý thư mục và file cứng (như FileSystemWatcher).
-using System.Linq;             // Gọi bộ công cụ (Linq) chuyên dùng để lọc danh sách file nhanh chóng (Ví dụ: chỉ lấy tệp .xlsx).
-using System.Threading.Tasks;  // Gọi thư viện hỗ trợ thao tác chạy đa luồng (Async/Await), giúp phần mềm quét ngầm mượt mà.
-using System.Windows.Forms;    // Gọi thư viện hộp thoại đồ họa (WinForms) để vẽ màn hình hiển thị, icon và thanh biểu tượng.
-using System.Drawing;          // Gọi thư viện cọ vẽ đồ họa để tô màu thông báo trên màn hình (Ví dụ màu Xanh báo Tốt, Đỏ báo Lỗi).
-using ImportData.Core;         // Kéo mã nguồn từ nhóm thư mục Core sang để dùng chung mô hình lưu trữ cấu hình AppConfig.
-using ImportData.Services;     // Kéo nhóm Services sang để điều phối các thợ làm việc chuyên trách (như DataService, ExcelService).
-using ImportData.Helpers;      // Kéo mảng Helpers để dùng các công cụ thao tác hệ thống nâng cao (chạy cùng Windows).
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Drawing;
+using ImportData.Core;
+using ImportData.Services;
+using ImportData.Helpers;
 
 namespace ImportData
 {
@@ -16,35 +16,30 @@ namespace ImportData
     /// </summary>
     public partial class Form1 : Form
     {
-        // MAX_LOG_LINES: Giới hạn số dòng thông báo trên màn hình là 1000 dòng.
-        // Tránh việc phần mềm chạy lâu ngày sinh ra quá nhiều thông báo làm treo RAM.
         private const int MAX_LOG_LINES = 1000; 
         
-        private readonly AppConfig _config;      // Biến lưu cấu hình hệ thống (như đường dẫn thư mục, chuỗi kết nối).
-        private DatabaseService _dbService;      // Biến quản lý dịch vụ tương tác với máy chủ SQL.
-        private ExcelService _excelService;      // Biến quản lý dịch vụ đọc và trích xuất dữ liệu từ file Excel.
+        private readonly AppConfig _config;
+        private DatabaseService _dbService;
+        private ExcelService _excelService;
         
-        private FileSystemWatcher _watcher;      // "Con mắt" của Windows: Công cụ chuyên theo dõi sự thay đổi trong thư mục.
-        private bool _isProcessing;              // Biến cờ (Flag) báo hiệu App đang bận xử lý file, tránh việc 2 luồng cùng xử lý 1 file gây lỗi.
+        private FileSystemWatcher _watcher;
+        private bool _isProcessing;
         
-        // --- HỆ THỐNG TỰ KIỂM TRA SỨC KHỎE (HEALTH CHECK) ---
-        private System.Windows.Forms.Timer _healthTimer; // Đồng hồ đếm nhịp, cứ sau một khoảng thời gian sẽ kiểm tra mạng và ổ đĩa.
-        private string _lastState = "";                  // Lưu lại trạng thái của lần kiểm tra trước (Ví dụ: "Lỗi mạng" hay "Bình thường").
-        private bool _isSystemHealthy = false;           // Cờ báo hiệu toàn bộ hệ thống (Mạng + Ổ đĩa) có đang hoạt động tốt hay không.
+        private System.Windows.Forms.Timer _healthTimer;
+        private string _lastState = "";
+        private bool _isSystemHealthy = false;
 
-        // --- HỆ THỐNG CHẠY NGẦM ---
-        private NotifyIcon _trayIcon; // Biểu tượng nhỏ hiển thị dưới góc phải màn hình (ẩn biểu tượng khi chạy ngầm).
+        private NotifyIcon _trayIcon;
 
         public Form1()
         {
-            InitializeComponent(); // Lệnh tạo ra các nút bấm, danh sách thông báo trên màn hình.
+            InitializeComponent();
             
-            // Cho phép chúng ta tự tay vẽ màu cho từng dòng chữ trong ô thông báo (lstLogs) thay vì màu đen mặc định.
             lstLogs.DrawMode = DrawMode.OwnerDrawFixed;
             lstLogs.DrawItem += LstLogs_DrawItem; 
             
-            _config = new AppConfig(); // Tạo cấu hình mới.
-            _config.Load(Log);         // Yêu cầu nạp file "appsettings.json". Nếu thành công sẽ in ra Log.
+            _config = new AppConfig();
+            _config.Load(null);
 
             _dbService = new DatabaseService(_config, Log); // Khởi tạo dịch vụ Database.
             _excelService = new ExcelService(Log);          // Khởi tạo dịch vụ Excel.
@@ -56,7 +51,7 @@ namespace ImportData
             _trayIcon = new NotifyIcon()
             {
                 Icon = SystemIcons.Information,
-                Text = "Hệ thống Import Data (Đang chạy ngầm)",
+                Text = "Import Data (Running)",
                 Visible = true
             };
 
@@ -79,7 +74,7 @@ namespace ImportData
         // Hàm này tự động chạy ngay sau khi phần mềm mở lên. Chữ 'async' giúp app không bị đơ khi thực thi lệnh bên trong.
         private async void Form1_Shown(object sender, EventArgs e)
         {
-            Log($">>> HỆ THỐNG KHỞI CHẠY - ĐANG THEO DÕI: {_config.BaseFolder} <<<");
+            Log($"Monitoring: {_config.BaseFolder}");
             
             _healthTimer = new System.Windows.Forms.Timer(); 
             _healthTimer.Interval = 10000; // Đặt thời gian kiểm tra định kỳ là 10.000 milliseconds (10 giây).
@@ -126,9 +121,9 @@ namespace ImportData
             // Kịch bản 1: Nếu ứng dụng Khỏe, mà người dùng lại vừa vào appsettings.json đổi tên thư mục Máy Đo sang thư mục khác.
             if (_isSystemHealthy && oldFolder != _config.BaseFolder)
             {
-                Log($"[THAY ĐỔI CẤU HÌNH] Phát hiện thư mục giám sát mới: {_config.BaseFolder}"); 
-                InitWatcher(); // Gọi hàm cài đặt lại con mắt theo dõi qua thư mục mới.
-                await PerformSyncAsync(); // Gọi hàm chạy quét rà soát toàn bộ file dư trong thư mục mới.
+                Log($"Monitoring folder: {_config.BaseFolder}"); 
+                InitWatcher(); 
+                await PerformSyncAsync(); 
             }
 
             // Kịch bản 2: Báo Lỗi hoặc Phục Hồi. So sánh trạng thái lỗi hiện tại với 10 giây trước đó. 
@@ -137,8 +132,7 @@ namespace ImportData
             {
                 if (_isSystemHealthy) 
                 {
-                    Log($"[OK] Hệ thống hoạt động tốt. Đang theo dõi: {_config.BaseFolder}");
-                    UpdateStatus("Hệ thống Sẵn sàng", Color.Green); // Báo rực màu xanh an toàn cho Form1.
+                    UpdateStatus("Hệ thống Sẵn sàng", Color.Green);
                     
                     InitWatcher(); 
                     await PerformSyncAsync(); 
@@ -149,13 +143,13 @@ namespace ImportData
                     StopWatcher(); 
                     if (!currentPathOk) 
                     {
-                        Log($"[LỖI THƯ MỤC] Không tìm thấy đường dẫn: {_config.BaseFolder}"); 
-                        UpdateStatus("Lỗi đường dẫn thư mục", Color.Red); 
+                        Log($"[ERROR] Path not found: {_config.BaseFolder}"); 
+                        UpdateStatus("Lỗi đường dẫn", Color.Red); 
                     }
                     else if (!currentDbOk) 
                     {
-                        Log("[LỖI DATABASE] Không kết nối được tới máy chủ cơ sở dữ liệu SQL.");
-                        UpdateStatus("Lỗi kết nối cơ sở dữ liệu", Color.Red);
+                        Log("[ERROR] Database connection failed.");
+                        UpdateStatus("Lỗi kết nối SQL", Color.Red);
                     }
                 }
                 _lastState = currentState; // Ghi nhớ lại tình trạng lỗi cho chu kỳ 10 giây mẻ sau.
@@ -183,8 +177,7 @@ namespace ImportData
                 this.Hide();     // Ẩn bảng màn hình ứng dụng đi, che mất khỏi thanh công việc.
                 
                 // Hiển thị một bóng thông báo nhỏ xíu góc Màn góc đồng hồ 3 giây. Cho anh em biết App vẫn còn sống ngầm.
-                _trayIcon.ShowBalloonTip(3000, "Thông báo", "Ứng dụng chuyển sang trạng thái chạy ngầm để tiết kiệm không gian lưới.", ToolTipIcon.Info); 
-                Log("Đã ẩn ứng dụng xuống khay hệ thống.");
+                _trayIcon.ShowBalloonTip(2000, "Import Data", "Ứng dụng đang chạy ngầm.", ToolTipIcon.Info); 
             }
         }
 
@@ -205,19 +198,50 @@ namespace ImportData
         // Tự tay vẽ màu cho bảng Log chữ.
         private void LstLogs_DrawItem(object sender, DrawItemEventArgs e)
         {
-            if (e.Index < 0) return; 
-            e.DrawBackground(); 
-            string text = lstLogs.Items[e.Index].ToString(); // Bốc dòng chữ tại vị trí dòng số mấy ra.
-            
-            Brush textBrush = Brushes.LimeGreen; // Thống nhất toàn bộ lưới dùng chữ màu xanh Tươi êm.
-            
-            // Tìm từ khóa. Nếu thấy "LỖI" hay "OK" thì đánh màu cho mạnh để quản lý dễ phát hiện ở xa.
-            if (text.Contains("[LỖI")) textBrush = Brushes.Red; 
-            else if (text.Contains("[OK]")) textBrush = Brushes.Cyan; 
+            if (e.Index < 0) return;
 
-            // Yêu cầu bộ xử lý nét vẽ (Graphics) in chữ lên đúng diện tích với màu Brush ta vừa chuẩn bị.
-            e.Graphics.DrawString(text, e.Font, textBrush, e.Bounds, StringFormat.GenericDefault);
-            e.DrawFocusRectangle(); 
+            string text = lstLogs.Items[e.Index].ToString(); // Bốc dòng chữ tại vị trí dòng số mấy ra.
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+            // --- PHẦN 1: VẼ NỀN ---
+            if (isSelected)
+            {
+                // Màu nền khi được chọn (Focus): Dùng màu Xám Slate tối (Gần với Đen) để làm nổi bật dòng mà không gây chói.
+                using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(40, 40, 45)))
+                {
+                    e.Graphics.FillRectangle(backBrush, e.Bounds);
+                }
+                
+                // Vẽ một "Thanh Nhấn" (Accent Bar) màu xanh sáng ở mép trái để nhận diện dòng đang chọn.
+                using (SolidBrush accentBrush = new SolidBrush(Color.FromArgb(0, 255, 255)))
+                {
+                    e.Graphics.FillRectangle(accentBrush, e.Bounds.X, e.Bounds.Y, 4, e.Bounds.Height);
+                }
+            }
+            else
+            {
+                // Màu nền mặc định (Đen sâu thẳm).
+                e.Graphics.FillRectangle(Brushes.Black, e.Bounds);
+            }
+
+            // --- PHẦN 2: QUYẾT ĐỊNH MÀU CHỮ ---
+            // GIỮ NGUYÊN MÀU GỐC: Không đổi sang màu Trắng khi focus để đảm bảo dữ liệu quan trọng ([LỖI], [OK]) luôn dễ nhận biết.
+            Brush textBrush = Brushes.LimeGreen; // Mặc định dùng Xanh Lime.
+
+            // Tìm từ khóa để đổi màu nhấn mạnh theo đúng ý nghĩa thông báo.
+            if (text.Contains("[LỖI")) textBrush = Brushes.Red;
+            else if (text.Contains("[OK]")) textBrush = Brushes.Cyan;
+            else if (text.Contains("[THAY ĐỔI") || text.Contains("Phát hiện mới")) textBrush = Brushes.Yellow;
+
+            // --- PHẦN 3: VẼ CHỮ ---
+            // Căn lề trái cách ra một chút (X + 8) để không bị đè lên Thanh Nhấn.
+            Rectangle textBounds = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+            
+            // Sử dụng StringFormat để căn giữa chữ theo chiều dọc cho cân đối.
+            using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
+            {
+                e.Graphics.DrawString(text, e.Font, textBrush, textBounds, sf);
+            }
         }
 
         // Hàm Ghi Log, đẩy dòng chữ mới vào danh sách ListBox.
@@ -336,7 +360,7 @@ namespace ImportData
             // Xóa sổ, ngày hôm nay chưa mở máy Lập trình Đo đạc thì thư mục chắc chắn chưa tồn. Ngưng quét Tốn Nhịp.
             if (!Directory.Exists(sourceFolder)) return; 
 
-            UpdateStatus("Đang kiểm tra và đồng bộ dữ liệu hôm nay...", Color.Yellow); 
+            UpdateStatus("Đang đồng bộ...", Color.Yellow); 
 
             try
             {
@@ -353,22 +377,20 @@ namespace ImportData
                     // Trùng (True) thì chạy câu lệnh (continue) -> Lờ Bỏ nó đi lấy Tệp Tên Kế Tiếp vòng lại. Tiết kiệm không phải Load Lại tệp Xã Hội rác Trùng Cũ!
                     if (await _dbService.IsFileImportedAsync(fileName)) continue; 
 
-                    Log($"Phát hiện mới: {fileName} - Đang nạp dữ liệu vào SQL...");
+                    Log($"Importing: {fileName}");
                     
-                    // Tung file zin này dâng vào Hàm Trọng Điểm Cuối Xử Lý (ProcessSingleFile)
                     bool success = await ProcessSingleFileAsync(filePath, fileName);
                     
-                    // Thu hồi trả kết quả Log báo công hiệu nạp Cổng vào!.
-                    if (success) Log($"[OK] File {fileName} đọc trót lọt và đã cất gọn Database.");
-                    else Log($"[LỖI] File {fileName} xử lý trục trặc, Nạp Hủy. Xem báo lỗi!");
+                    if (success) Log($"[OK] {fileName}");
+                    else Log($"[ERROR] {fileName} failed.");
                 }
                 
-                UpdateStatus("Hệ thống Sẵn sàng, Gọn Gàng An Toàn", Color.Green); 
+                UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                UpdateStatus("Lỗi đồng bộ dữ liệu thư mục Mạng", Color.Red); 
-                Log($"LỖI ĐỒNG BỘ: {ex.Message}"); 
+                UpdateStatus("Lỗi đồng bộ", Color.Red); 
+                Log("[ERROR] Sync failed."); 
             }
         }
 
@@ -389,9 +411,9 @@ namespace ImportData
                 // Hồi phản số dòng (Ví dụ trả 10). Tức là > 0 thì Trình Báo Vui Lên Sếp Cờ Hàm Rằng Bọt Đã Đổ True Lên Ngon Lành Cành Quất Rụng Ngay!.
                 return rowsImported > 0; 
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Log($"Xảy ra Lỗi lúc Xử Lý Lạc Tệp Đóng {fileName}: {ex.Message}"); 
+                Log($"[ERROR] Processing {fileName} failed."); 
                 return false;
             }
         }

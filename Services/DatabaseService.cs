@@ -1,19 +1,15 @@
-using Microsoft.Data.SqlClient; // Gọi thư viện chuyên dùng để kết nối và thao tác với cơ sở dữ liệu SQL Server.
-using System;                   // Gọi bộ thư viện cơ bản của C# (chứa các hàm xử lý chuỗi, bắt lỗi).
-using System.Data;              // Gọi thư viện chứa "DataTable" - một cấu trúc bảng dữ liệu trên RAM giống như Excel.
-using System.Threading.Tasks;   // Gọi thư viện xử lý đa luồng (Async/Task), giúp phần mềm chạy ngầm mà không làm đơ giao diện.
-using ImportData.Core;          // Cho phép sử dụng các lớp trong thư mục Core, ví dụ như AppConfig để lấy cấu hình đường dẫn.
+using Microsoft.Data.SqlClient;
+using System;
+using System.Data;
+using System.Threading.Tasks;
+using ImportData.Core;
 
 namespace ImportData.Services 
 {
-    /// <summary>
-    /// Lớp DatabaseService: Chuyên chịu trách nhiệm giao tiếp với cơ sở dữ liệu SQL Server,
-    /// bao gồm kiểm tra kết nối, kiểm tra lịch sử file và đẩy dữ liệu lớn.
-    /// </summary>
     public class DatabaseService
     {
-        private readonly AppConfig _config;      // Biến lưu trữ cấu hình hệ thống (Ví dụ: Chuỗi kết nối SQL). readonly nghĩa là chỉ đọc.
-        private readonly Action<string> _logger; // Gửi tin nhắn log lên giao diện Form1 để người dùng biết trạng thái.
+        private readonly AppConfig _config;
+        private readonly Action<string> _logger;
 
         // Hàm khởi tạo, bắt buộc phải truyền vào cấu hình và hàm ghi log khi gọi "new DatabaseService()".
         public DatabaseService(AppConfig config, Action<string> logger)
@@ -41,10 +37,10 @@ namespace ImportData.Services
                     return true; // Nếu mở cửa thành công không bị báo lỗi, trả về giá trị Đúng (true).
                 } 
             }
-            catch (Exception ex) // Bắt lại lỗi rớt mạng hoặc sai mật khẩu.
+            catch (Exception)
             {
-                _logger?.Invoke($"[LỖI DB] {ex.Message}"); // Báo cáo lỗi lên màn hình Form1.
-                return false; // Trả về Sai (false) vì không kết nối được.
+                _logger?.Invoke("[ERROR] SQL connection failed"); 
+                return false;
             }
         }
 
@@ -74,9 +70,9 @@ namespace ImportData.Services
                     }
                 } 
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger?.Invoke($"Lỗi kiểm tra lịch sử file báo về: {ex.Message}"); 
+                _logger?.Invoke("[ERROR] History check failed"); 
                 return false; 
             }
         }
@@ -147,13 +143,11 @@ namespace ImportData.Services
                         trans.Commit(); 
                         return dt.Rows.Count; // Vẩy tay Báo số liệu dòng đã được chuyển về Form cho biết dòng cuối thực thi.
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        // Rollback: Xóa bỏ dữ liệu rở dang vấp ngã. Ứng dụng dọn đi dữ liệu trên SQL trong lệnh Transaction của lần thao tác mới vừa đổ hỏng lỗi này.
                         trans.Rollback(); 
-                        
-                        _logger?.Invoke($"[LỖI GIAO DỊCH] Hủy bỏ nạp file {fileName} ngay lập tức do hệ báo lỗi: {ex.Message}"); 
-                        throw; // Chuyển ném lỗi lên đầu màn Form1 in ra đỏ, để nhà điều hành quản định xử lý!.
+                        _logger?.Invoke($"[ERROR] Batch import failed: {fileName}"); 
+                        throw; 
                     }
                 }
             }

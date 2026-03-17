@@ -1,7 +1,7 @@
-using ExcelDataReader; // Gọi thư viện bên thứ 3 (phải cài tự động từ Nuget) chuyên xử lý file Excel độc lập.
-using System;          // Gọi thư viện căn bản của C# (Ví dụ: kiểm duyệt Null, chuỗi).
-using System.Data;     // Gọi thư viện tổ chức dữ liệu dạng bảng lưới chuẩn mực (DataTable).
-using System.IO;       // Gọi thư viện dùng để tương tác tệp (File, Thư mục) thông qua hệ điều hành.
+using ExcelDataReader;
+using System;
+using System.Data;
+using System.IO;
 
 namespace ImportData.Services 
 {
@@ -10,7 +10,7 @@ namespace ImportData.Services
     /// </summary>
     public class ExcelService
     {
-        private readonly Action<string> _logger; // Biến truyền nhắn log gởi tin về Form màn hình.
+        private readonly Action<string> _logger;
 
         // Mảng Tên 23 cột bắt buộc phải tồn tại trong file excel máy xuất (Lưu ý: Mới bổ sung thêm cột "LotNo").
         private static readonly string[] RequiredHeaders = {
@@ -63,8 +63,8 @@ namespace ImportData.Services
                     // Loại trừ việc bản nâng cấp máy đo vô tình xuất rớt 1 cột đi (Tạo lỗi cột lệch vào SQL).  
                     if (!ValidateHeaders(dt))
                     {
-                        _logger?.Invoke($"[LỖI TẠO CẤU TRÚC CHI TIẾT] File {Path.GetFileName(filePath)} bị hao hụt mảng cột dữ liệu hoặc không khớp mẫu gốc. Từ Chối Nạp Tệp."); 
-                        return null; // Tải hàm trả File khuyết để SQL Service không chạm tới file này.
+                        _logger?.Invoke($"[ERROR] Invalid layout: {Path.GetFileName(filePath)}"); 
+                        return null; 
                     }
 
                     // 2. Tinh Xử Lý Dữ Liệu Chống Lỗi (Data Cleansing) - Bẩn giá trị
@@ -89,8 +89,7 @@ namespace ImportData.Services
             }
             catch (Exception ex) 
             {
-                // Bắt nếu file có mật khẩu bị Zip che hoặc lỗi phần Cấu Trúc Đọc Thẻ. Cảnh log bảo Màn. 
-                _logger?.Invoke($"Lỗi bất thường đọc phần dịch thuật thẻ Excel hoặc file cấu trúc bị hỏng mã: {ex.Message}"); 
+                _logger?.Invoke($"[ERROR] Excel read: {ex.Message}"); 
                 return null; 
             }
         }
