@@ -16,58 +16,76 @@ namespace ImportData
     /// </summary>
     public partial class Form1 : Form
     {
+        // MAX_LOG_LINES: Giới hạn số dòng nhật ký hiển thị trên màn hình để tránh làm nặng RAM máy tính.
         private const int MAX_LOG_LINES = 1000; 
         
+        // _config: Đối tượng quản lý các thông số cài đặt (Thư mục, SQL).
         private readonly AppConfig _config;
+        
+        // _dbService: Dịch vụ giúp tương tác với cơ sở dữ liệu SQL Server.
         private DatabaseService _dbService;
+        
+        // _excelService: Dịch vụ giúp đọc và giải mã các tệp Excel từ máy đo.
         private ExcelService _excelService;
         
+        // _watcher: "Con mắt" của Windows dùng để canh chừng xem có file nào mới sinh ra trong thư mục không.
         private FileSystemWatcher _watcher;
+        
+        // _isProcessing: Biến "Cờ hiệu" để báo hiệu App đang bận xử lý tệp, tránh việc quét chồng chéo linh tinh.
         private bool _isProcessing;
         
+        // _healthTimer: Chiếc đồng hồ 10 giây dùng để định kỳ kiểm tra sức khỏe hệ thống.
         private System.Windows.Forms.Timer _healthTimer;
+        
+        // _lastState: Ghi nhớ trạng thái bệnh tật lần cuối để tránh in lỗi trùng lặp liên tục.
         private string _lastState = "";
+        
+        // _isSystemHealthy: Biến xác nhận xem hiện tại SQL và Thư mục có đang ổn định hay không.
         private bool _isSystemHealthy = false;
 
+        // _trayIcon: Biểu tượng nhỏ xíu hình chữ 'i' chạy ở góc khay đồng hồ Windows.
         private NotifyIcon _trayIcon;
 
+        // HÀM KHỞI TẠO (Constructor): Chạy đầu nhất khi phần mềm bắt đầu bật lên.
         public Form1()
         {
-            InitializeComponent();
+            InitializeComponent(); // Gọi lệnh vẽ các nút bấm, bảng Log lên màn hình.
             
+            // Cài đặt chế độ tự vẽ màu cho bảng Log (OwnerDraw) để có màu sắc Hacker đẹp mắt.
             lstLogs.DrawMode = DrawMode.OwnerDrawFixed;
             lstLogs.DrawItem += LstLogs_DrawItem; 
             
+            // Khởi tạo và nạp file cấu hình appsettings.json.
             _config = new AppConfig();
             _config.Load(null);
 
-            _dbService = new DatabaseService(_config, Log); // Khởi tạo dịch vụ Database.
-            _excelService = new ExcelService(Log);          // Khởi tạo dịch vụ Excel.
+            // Bật các dịch vụ Database và Excel lên để sẵn sàng làm việc.
+            _dbService = new DatabaseService(_config, Log); 
+            _excelService = new ExcelService(Log);          
 
-            // Yêu cầu Windows: Mỗi khi bật máy tính lên, hãy tự động chạy phần mềm này ẩn ở dưới nền.
+            // Đăng ký với Windows: "Hãy tự bật App này lên mỗi khi máy tính khởi động".
             SystemHelper.SetStartup(Log);
 
-            // Cài đặt biểu tượng nhỏ chạy dưới góc khay đồng hồ.
+            // Cài đặt thông số cho biểu tượng dưới khay đồng hồ.
             _trayIcon = new NotifyIcon()
             {
                 Icon = SystemIcons.Information,
-                Text = "Import Data (Running)",
+                Text = "Dịch vụ Auto Import (Đang chạy)",
                 Visible = true
             };
 
-            // Bắt sự kiện: Nếu người dùng nhấp đúp máy chuột vào biểu tượng thì mở to giao diện phần mềm ra.
+            // Sự kiện: Nhấp đúp chuột vào icon khay thì hiện lại giao diện chính.
             _trayIcon.DoubleClick += (s, e) => {
                 this.Show(); 
                 this.WindowState = FormWindowState.Normal; 
             };
 
-            this.ShowInTaskbar = true; // Hiện phần mềm trên thanh ngang dưới cùng của Windows.
+            // Cho phép App hiện ở thanh taskbar nằm dưới đáy màn hình.
+            this.ShowInTaskbar = true; 
             this.WindowState = FormWindowState.Normal; 
 
-            // Cài đặt sự kiện: Ngay khi bảng Form1 vừa hiện lên màn hình thì chạy hàm "Form1_Shown".
+            // Cài đặt thêm các sự kiện khi hiện Form và khi người dùng bấm nút tắt.
             this.Shown += Form1_Shown; 
-            
-            // Cài đặt sự kiện: Khi người dùng bấm dấu X tắt app thì chạy hàm "Form1_FormClosing".
             this.FormClosing += Form1_FormClosing;  
         }
 

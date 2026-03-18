@@ -12,55 +12,58 @@ namespace ImportData.Tests
     public class ExcelServiceTests
     {
         /// <summary>
-        /// Test: Nếu đường dẫn file không tồn tại, hàm phải trả về null và ghi log lỗi.
+        /// TEST 1: Nếu đường dẫn file không tồn tại, hàm phải trả về null và ghi log báo lỗi.
         /// </summary>
         [Fact]
         public void ReadExcelFile_ShouldReturnNull_AndLog_WhenFileNotFound()
         {
-            // Arrange
+            // 1. Chuẩn bị (Arrange): Tạo dịch vụ Excel và một đường dẫn "ma" không hề tồn tại.
             var service = new ExcelService(msg => {
-                // Kiểm tra xem log có chứa nội dung báo lỗi không
-                Assert.Contains("Lỗi đọc file Excel", msg);
+                // Kiểm tra xem trong chuỗi Log có chứa từ khóa báo lỗi đọc file không.
+                Assert.Contains("[ERROR] Excel read", msg);
             });
-            // nonExistentPath ví dụ: "C:\Windows\System32\khong_co_file.xlsx"
-            string nonExistentPath = "C:\\InvalidPath\\file_not_exist_xyz.xlsx";
+            
+            string nonExistentPath = "C:\\Duong_Dan_Gia\\file_khong_co_that.xlsx";
 
-            // Act
+            // 2. Hành động (Act): Thử đọc file không tồn tại đó.
             var dt = service.ReadExcelFile(nonExistentPath);
 
-            // Assert
+            // 3. Kiểm tra (Assert):
+            // Kết quả trả về phải là Null (Không có bảng dữ liệu nào được sinh ra).
             Assert.Null(dt);
         }
 
         /// <summary>
-        /// Test: Nếu file không phải định dạng Excel (.xlsx), hệ thống phải bắt được lỗi và trả về null.
+        /// TEST 2: Nếu file không phải định dạng Excel hợp lệ, hệ thống phải bắt được lỗi và trả về null thay vì bị sập.
         /// </summary>
         [Fact]
         public void ReadExcelFile_ShouldCatchExceptionAndReturnNull_WhenFileIsInvalid()
         {
-            // Arrange
-            // tempFile ví dụ: "C:\Users\...\AppData\Local\Temp\tmpA1B2.tmp"
+            // 1. Chuẩn bị (Arrange): 
+            // Tạo một file tạm .tmp nhưng ghi nội dung là văn bản bình thường (không phải cấu trúc nhị phân của Excel).
             string tempFile = Path.GetTempFileName();
-            File.WriteAllText(tempFile, "Nội dung văn bản thông thường, không phải mã nhị phân Excel");
+            File.WriteAllText(tempFile, "Day la noi dung van ban, be ngoai la file nhung ben trong khong phai Excel.");
 
             bool errorLogged = false;
             var service = new ExcelService(msg => {
-                if (msg.Contains("Lỗi đọc file Excel")) errorLogged = true;
+                // Đánh dấu nếu App có gọi hàm ghi log báo lỗi đọc Excel.
+                if (msg.Contains("[ERROR] Excel read")) errorLogged = true;
             });
 
-            // Act
+            // 2. Hành động (Act):
+            // Thử đọc file rác đó và dùng Record.Exception để xem có lỗi Exception nào văng ra làm sập App không.
             var exception = Record.Exception(() => 
             {
                 var dt = service.ReadExcelFile(tempFile);
-                Assert.Null(dt);
+                Assert.Null(dt); // Kết quả đọc file rác phải là Null.
             });
 
-            // Assert
-            Assert.Null(exception); // Đảm bảo App không bị vỡ (Crash)
-            Assert.True(errorLogged);
+            // 3. Kiểm tra (Assert):
+            Assert.Null(exception); // App phải chạy xuyên suốt, không được nổ lỗi Exception.
+            Assert.True(errorLogged); // Phải có dòng Log báo lỗi xuất hiện cho người dùng biết.
 
-            // Xóa file tạm sau khi test xong
-            File.Delete(tempFile);
+            // Dọn dẹp: Xóa file tạm sau khi đã Test xong để đỡ rác ổ cứng.
+            if (File.Exists(tempFile)) File.Delete(tempFile);
         }
     }
 }

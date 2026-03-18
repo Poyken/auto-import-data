@@ -28,56 +28,86 @@ namespace ImportData
         /// </summary>
         private void InitializeComponent()
         {
-            this.statusStrip1 = new System.Windows.Forms.StatusStrip();
-            this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
-            this.lstLogs = new System.Windows.Forms.ListBox();
-            this.statusStrip1.SuspendLayout();
-            this.SuspendLayout();
-            // 
-            // statusStrip1 (Thanh trạng thái dưới cùng)
-            // 
-            this.statusStrip1.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
+            // Khởi tạo các đối tượng điều khiển (Controls) trên giao diện.
+            this.statusStrip1 = new System.Windows.Forms.StatusStrip(); 
+            this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel(); 
+            this.lstLogs = new System.Windows.Forms.ListBox(); 
+            
+            // Tạm dừng việc vẽ giao diện để thiết lập các thông số (Layout).
+            this.statusStrip1.SuspendLayout(); 
+            this.SuspendLayout(); 
+            
+            // --- THIẾT LẬP THANH TRẠNG THÁI (statusStrip1) ---
+            // Đặt màu nền tối (Gần đen) cho thanh trạng thái nằm dưới chân ứng dụng.
+            this.statusStrip1.BackColor = System.Drawing.Color.FromArgb(30, 30, 30); 
+            
+            // Gắn nhãn chữ (lblStatus) vào thanh trạng thái.
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.lblStatus});
-            this.statusStrip1.Location = new System.Drawing.Point(0, 419);
+            
+            // Vị trí đặt thanh trạng thái (Tọa độ X=0, Y=419).
+            this.statusStrip1.Location = new System.Drawing.Point(0, 419); 
             this.statusStrip1.Name = "statusStrip1";
-            this.statusStrip1.Size = new System.Drawing.Size(784, 22);
+            
+            // Kích thước thanh ngang (Rộng=784, Cao=22).
+            this.statusStrip1.Size = new System.Drawing.Size(784, 22); 
             this.statusStrip1.TabIndex = 0;
             this.statusStrip1.Text = "statusStrip1";
-            // 
-            // lblStatus (Nhãn hiển thị trạng thái OK/Lỗi)
-            // 
-            this.lblStatus.ForeColor = System.Drawing.Color.White;
+            
+            // --- THIẾT LẬP NHÃN CHỮ TRẠNG THÁI (lblStatus) ---
+            // Đặt màu chữ là trắng mặc định.
+            this.lblStatus.ForeColor = System.Drawing.Color.White; 
             this.lblStatus.Name = "lblStatus";
+            
+            // Kích thước và nội dung chữ hiển thị ban đầu.
             this.lblStatus.Size = new System.Drawing.Size(115, 17);
             this.lblStatus.Text = "Hệ thống sẵn sàng";
-            // 
-            // lstLogs (Bảng hiển thị Nhật ký hoạt động)
-            // 
-            this.lstLogs.BackColor = System.Drawing.Color.Black;
-            this.lstLogs.BorderStyle = System.Windows.Forms.BorderStyle.None;
-            this.lstLogs.Dock = System.Windows.Forms.DockStyle.Fill;
+            
+            // --- THIẾT LẬP BẢNG NHẬT KÝ (lstLogs) ---
+            // Đặt màu nền đen sâu thẳm giống màn hình Hacker.
+            this.lstLogs.BackColor = System.Drawing.Color.Black; 
+            
+            // Loại bỏ đường viền của bảng để giao diện trông phẳng và hiện đại hơn.
+            this.lstLogs.BorderStyle = System.Windows.Forms.BorderStyle.None; 
+            
+            // Dock=Fill: Yêu cầu bảng này tự động "Uống chiếm" toàn bộ không gian còn trống của cửa sổ.
+            this.lstLogs.Dock = System.Windows.Forms.DockStyle.Fill; 
+            
+            // Đặt phông chữ Consolas (Chữ chuyên dụng cho code) cỡ 10.
             this.lstLogs.Font = new System.Drawing.Font("Consolas", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.lstLogs.ForeColor = System.Drawing.Color.Lime;
+            
+            // Màu chữ là Xanh Lá (Lime) - Màu kinh điển của các thiết bị công nghiệp.
+            this.lstLogs.ForeColor = System.Drawing.Color.Lime; 
             this.lstLogs.FormattingEnabled = true;
-            this.lstLogs.HorizontalScrollbar = true;
+            
+            // Cho phép xuất hiện thanh cuộn ngang nếu dòng log quá dài.
+            this.lstLogs.HorizontalScrollbar = true; 
             this.lstLogs.ItemHeight = 15;
             this.lstLogs.Location = new System.Drawing.Point(0, 0);
             this.lstLogs.Name = "lstLogs";
             this.lstLogs.Size = new System.Drawing.Size(784, 419);
             this.lstLogs.TabIndex = 1;
-            // 
-            // Form1 (Thiết lập cửa sổ chính)
-            // 
+            
+            // --- THIẾT LẬP CỬA SỔ CHÍNH (Form1) ---
+            // Cấu hình tỷ lệ hiển thị phông chữ của Windows. (7x15 pixels).
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.Black;
-            this.ClientSize = new System.Drawing.Size(784, 441);
+            
+            this.BackColor = System.Drawing.Color.Black; // Nền cửa sổ màu đen.
+            
+            // Kích thước ban đầu của cửa sổ (Rộng=784, Cao=441).
+            this.ClientSize = new System.Drawing.Size(784, 441); 
+            
+            // Gắn các điều khiển đã tạo ở trên vào khung cửa sổ.
             this.Controls.Add(this.lstLogs);
             this.Controls.Add(this.statusStrip1);
             this.Name = "Form1";
+            
+            // CenterScreen: Yêu cầu khi bật App lên thì nó tự nhảy vào chính giữa màn hình máy tính.
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Dashboard: Hệ thống Auto Import Capacitor Data";
+            
+            // Tiếp tục vẽ lại giao diện sau khi đã thiết lập xong xuôi.
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
             this.ResumeLayout(false);
@@ -86,9 +116,10 @@ namespace ImportData
 
         #endregion
 
-        private System.Windows.Forms.StatusStrip statusStrip1;
-        private System.Windows.Forms.ToolStripStatusLabel lblStatus;
-        private System.Windows.Forms.ListBox lstLogs;
+        // Khai báo các biến đại diện cho các thành phần trên giao diện.
+        private System.Windows.Forms.StatusStrip statusStrip1;       // Thanh ngang chứa trạng thái ở dưới.
+        private System.Windows.Forms.ToolStripStatusLabel lblStatus; // Dòng chữ hiển thị kết quả (OK/Lỗi).
+        private System.Windows.Forms.ListBox lstLogs;                // Bảng hiển thị danh sách nhật ký nạp file.
     }
 }
 

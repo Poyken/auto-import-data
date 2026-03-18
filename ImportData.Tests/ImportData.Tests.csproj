@@ -1,26 +1,32 @@
+<!-- Tệp cấu hình dự án Test (Unit Tests): Chứa các thư viện phục vụ việc kiểm tra tự động mã nguồn. -->
 <Project Sdk="Microsoft.NET.Sdk">
-
+ 
   <PropertyGroup>
+    <!-- Hệ điều hành đích .NET dành cho Windows. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- Đánh dấu Project này không dùng để nén gói thành file chạy (vì nó là file rác kiểm tra). -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>
-
+ 
   <ItemGroup>
+    <!-- CÁC THƯ VIỆN KIỂM THỬ (Testing Libraries) -->
+    <!-- Xunit: Khung tiêu chuẩn để viết các hàm 'Fact' và 'Theory' nhằm tự động bấm nút nút lệnh kiểm soát lỗi. -->
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
-
+ 
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
-
+ 
   <ItemGroup>
+    <!-- Kết nối dự án Test tới dự án chính (ImportData) để gọi được code qua kiểm tra. -->
     <ProjectReference Include="..\ImportData.csproj" />
   </ItemGroup>
-
+ 
 </Project>
