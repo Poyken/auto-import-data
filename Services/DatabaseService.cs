@@ -57,8 +57,7 @@ namespace ImportData.Services
             }
             catch (Exception)
             {
-                // Nếu có lỗi (như sai mật khẩu, server tắt...), ghi log báo lỗi và trả về False.
-                _logger?.Invoke("[LỖI] Kết nối SQL thất bại."); 
+                // Không log ở đây vì health check chạy mỗi 10s, Form1 sẽ tự xử lý thông báo khi trạng thái thay đổi.
                 return false;
             }
         }

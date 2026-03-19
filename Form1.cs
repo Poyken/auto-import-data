@@ -150,6 +150,11 @@ namespace ImportData
             {
                 if (_isSystemHealthy) 
                 {
+                    // Nếu trước đó đang lỗi (_lastState != "") mà giờ khỏe lại → thông báo phục hồi.
+                    if (_lastState != "")
+                    {
+                        Log("[SUCCESS] System reconnected.");
+                    }
                     UpdateStatus("Hệ thống Sẵn sàng", Color.Green);
                     
                     InitWatcher(); 
