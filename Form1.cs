@@ -247,8 +247,7 @@ namespace ImportData
             Brush textBrush = Brushes.LimeGreen; // Mặc định dùng Xanh Lime.
 
             // Tìm từ khóa để đổi màu nhấn mạnh theo đúng ý nghĩa thông báo.
-            if (text.Contains("[LỖI")) textBrush = Brushes.Red;
-            else if (text.Contains("[OK]")) textBrush = Brushes.Cyan;
+            if (text.Contains("[LỖI") || text.Contains("[ERROR]")) textBrush = Brushes.Red;
             else if (text.Contains("[THAY ĐỔI") || text.Contains("Phát hiện mới")) textBrush = Brushes.Yellow;
 
             // --- PHẦN 3: VẼ CHỮ ---
@@ -399,8 +398,7 @@ namespace ImportData
                     
                     bool success = await ProcessSingleFileAsync(filePath, fileName);
                     
-                    if (success) Log($"[OK] {fileName}");
-                    else Log($"[ERROR] {fileName} failed.");
+                    if (!success) Log($"[ERROR] {fileName} failed.");
                 }
                 
                 UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 

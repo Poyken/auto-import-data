@@ -19,6 +19,10 @@ namespace ImportData.Core
         public string ConnectionString { get; set; }
         public string BaseFolder { get; set; }
 
+        // Thời gian chờ kết nối tối đa (giây) khi health check kiểm tra SQL.
+        // Mặc định 5 giây, user có thể chỉnh trong appsettings.json mục HealthCheckSettings.ConnectionTimeoutSeconds.
+        public int HealthCheckTimeoutSeconds { get; set; } = 5;
+
         /// <summary>
         /// Khởi tạo mặc định ban đầu. Hàm này sẽ tự chạy đầu tiên khi gõ "new AppConfig()".
         /// </summary>
@@ -85,6 +89,15 @@ namespace ImportData.Core
                             {
                                 // Gán đường dẫn thư mục quét, nếu null thì giữ nguyên mặc định.
                                 BaseFolder = baseFld.GetString() ?? BaseFolder; 
+                            }
+
+                            // 3. Tìm mục "HealthCheckSettings" và lấy giá trị "ConnectionTimeoutSeconds".
+                            if (root.TryGetProperty("HealthCheckSettings", out var healthSettings) && 
+                                healthSettings.TryGetProperty("ConnectionTimeoutSeconds", out var timeoutVal))
+                            {
+                                int val = timeoutVal.GetInt32();
+                                // Giới hạn trong khoảng hợp lý 1-30 giây, tránh user ghi nhầm số âm hoặc quá lớn.
+                                HealthCheckTimeoutSeconds = Math.Max(1, Math.Min(30, val));
                             }
                         }
                     }

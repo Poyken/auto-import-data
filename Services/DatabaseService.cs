@@ -14,12 +14,17 @@ namespace ImportData.Services
         // _logger: Hàm dùng để in các thông báo lỗi hoặc trạng thái ra màn hình ListBox.
         private readonly Action<string> _logger;
 
+        // _lastConnectionString: Ghi nhớ chuỗi kết nối lần trước để phát hiện khi user đổi server trong appsettings.json.
+        // Chỉ khi chuỗi này thay đổi ta mới xóa Connection Pool, tránh xóa mù mỗi 10 giây gây lãng phí tài nguyên mạng.
+        private string _lastConnectionString;
+
         // Hàm khởi tạo: Được gọi khi viết "new DatabaseService(...)". 
         // Nó giúp "nhồi" (Inject) cấu hình và trình ghi log vào trong lớp này để sử dụng.
         public DatabaseService(AppConfig config, Action<string> logger)
         {
             _config = config; // Lưu cấu hình vào biến nội bộ.
             _logger = logger; // Lưu trình ghi log vào biến nội bộ.
+            _lastConnectionString = config.ConnectionString; // Ghi nhớ chuỗi kết nối ban đầu.
         }
 
         /// <summary>
@@ -30,13 +35,17 @@ namespace ImportData.Services
         {
             try 
             {
-                // Xóa bỏ tất cả các kết nối cũ đang chờ trong bộ nhớ đệm.
-                // Điều này giúp việc kiểm tra trạng thái mạng SQL là chính xác và mới nhất.
-                SqlConnection.ClearAllPools(); 
+                // Chỉ xóa Connection Pool khi user thay đổi chuỗi kết nối trong appsettings.json.
+                // Tránh xóa mù mỗi 10 giây làm gián đoạn các kết nối đang hoạt động (ví dụ BulkCopy đang nạp dữ liệu).
+                if (_config.ConnectionString != _lastConnectionString)
+                {
+                    SqlConnection.ClearAllPools();
+                    _lastConnectionString = _config.ConnectionString;
+                }
                 
                 // Sử dụng SqlConnectionStringBuilder để tùy chỉnh lại chuỗi kết nối.
-                // Ở đây ta ép thời gian chờ (Timeout) chỉ là 2 giây. Nếu sau 2s không thấy SQL trả lời thì coi như Lỗi.
-                var builder = new SqlConnectionStringBuilder(_config.ConnectionString) { ConnectTimeout = 2 };
+                // Timeout lấy từ cấu hình appsettings.json (mặc định 5 giây), đủ cho mạng LAN công nghiệp.
+                var builder = new SqlConnectionStringBuilder(_config.ConnectionString) { ConnectTimeout = _config.HealthCheckTimeoutSeconds };
                 
                 // Khởi tạo một đối tượng kết nối (testConn) với chuỗi cấu hình mới.
                 using (var testConn = new SqlConnection(builder.ConnectionString)) 
@@ -162,13 +171,14 @@ namespace ImportData.Services
 
                         // Lệnh Commit: Nếu tới đây mọi việc đều mượt mà, ta ra lệnh cho SQL Server "Chốt sổ" lưu vĩnh viễn dữ liệu.
                         trans.Commit(); 
+                        _logger?.Invoke($"[OK] Import success {dt.Rows.Count} rows from {fileName}");
                         return dt.Rows.Count; // Trả về số lượng dòng đã nạp thành công để hiện ra màn hình.
                     }
                     catch (Exception)
                     {
                         // Nếu có bất kỳ lỗi gì xảy ra (mất mạng, SQL đầy ổ cứng...), lệnh Rollback sẽ xóa sạch những gì vừa nạp dang dở.
                         trans.Rollback(); 
-                        _logger?.Invoke($"[LỖI] Quá trình nạp hàng loạt thất bại: {fileName}"); 
+                        _logger?.Invoke($"[ERROR] Import failed {dt.Rows.Count} rows from {fileName}"); 
                         throw; // Quăng lỗi ra ngoài để hàm cha (Form1) xử lý tiếp.
                     }
                 }
