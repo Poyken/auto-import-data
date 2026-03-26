@@ -63,8 +63,7 @@ namespace ImportData
             _dbService = new DatabaseService(_config, Log); 
             _excelService = new ExcelService(Log);          
 
-            // Đăng ký với Windows: "Hãy tự bật App này lên mỗi khi máy tính khởi động".
-            SystemHelper.SetStartup(Log);
+
 
             // Cài đặt thông số cho biểu tượng dưới khay đồng hồ.
             _trayIcon = new NotifyIcon()

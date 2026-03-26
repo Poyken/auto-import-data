@@ -6,3 +6,5 @@
 *.sln.docstates
 publish/
 *.zip
+dist/
+out.txt
