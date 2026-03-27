@@ -76,9 +76,9 @@ namespace ImportData.Services
                 {
                     await conn.OpenAsync(); // Mở kết nối.
                     
-                // Câu lệnh SQL: Đếm (COUNT) xem có dòng nào trong bảng ExcelImportHistory có đường dẫn file khớp không.
+                // Câu lệnh SQL: Đếm (COUNT) xem có dòng nào trong bảng ExcelHistory_Import có đường dẫn file khớp không.
                 // Chỉ tính các file đã nạp thành công (Status = 'Success').
-                string sql = "SELECT COUNT(*) FROM ExcelImportHistory WHERE FilePath = @path AND Status = 'Success'";
+                string sql = "SELECT COUNT(*) FROM ExcelHistory_Import WHERE FilePath = @path AND Status = 'Success'";
                 
                 using (SqlCommand cmd = new SqlCommand(sql, conn)) // Chuẩn bị gói lệnh SQL gởi đi.
                 {
@@ -136,8 +136,8 @@ namespace ImportData.Services
                         // SqlBulkCopy: Trình nạp dữ liệu hàng loạt mạnh nhất của C#.
                         using (SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
-                            // Chỉ định tên bảng đích trong Database là "SortingDataImportExcel".
-                            bulkCopy.DestinationTableName = "SortingDataImportExcel"; 
+                            // Chỉ định tên bảng đích trong Database là "ExcelData_Import".
+                            bulkCopy.DestinationTableName = "ExcelData_Import"; 
                             
                             // Định nghĩa danh sách các cột sẽ được map (khớp) từ file Excel sang bảng SQL.
                             // Thứ tự này phải khớp hoàn toàn với cấu trúc bảng trong SQL Server.
@@ -159,10 +159,10 @@ namespace ImportData.Services
                             await bulkCopy.WriteToServerAsync(dt); 
                         }
 
-                        // Sau khi nạp xong dữ liệu máy đo, ta ghi thêm 1 dòng vào bảng "ExcelImportHistory".
+                        // Sau khi nạp xong dữ liệu máy đo, ta ghi thêm 1 dòng vào bảng "ExcelHistory_Import".
                         // Để đánh dấu: "Tui đã nạp thành công file này nhé!".
                         long fileSize = new FileInfo(filePath).Length;
-                        string sql = "INSERT INTO ExcelImportHistory (FilePath, FileSize, ImportedAt, RowsInserted, Status) " +
+                        string sql = "INSERT INTO ExcelHistory_Import (FilePath, FileSize, ImportedAt, RowsInserted, Status) " +
                                      "VALUES (@path, @size, GETDATE(), @rows, 'Success')";
                         
                         using (SqlCommand cmd = new SqlCommand(sql, conn, trans)) 

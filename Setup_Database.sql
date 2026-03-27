@@ -1,24 +1,23 @@
 /* 
-   HƯỚNG DẪN: SCRIPT TẠO BẢNG DỮ LIỆU CHO HỆ THỐNG AUTO IMPORT
+   HƯỚNG DẪN: SCRIPT TẠO BẢNG DỮ LIỆU CHO HỆ THỐNG AUTO IMPORT (BẢN FINAL)
    ----------------------------------------------------------
-   Mục tiêu: Tạo bảng SortingDataImportExcel (theo cấu trúc máy đo)
-   và bảng ImportHistory để theo dõi lịch sử nạp file.
+   Mục tiêu: Tạo 2 bảng mới với tên độc nhất để tránh trùng lặp dữ liệu cũ.
 */
 
--- Chọn Database mục tiêu (Thay đổi nếu dùng tên khác)
+-- Chọn Database mục tiêu
 USE SmartFactoryV2; 
 GO
 
--- 1. TẠO BẢNG CHỨA DỮ LIỆU MÁY ĐO [SortingDataImportExcel]
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SortingDataImportExcel]') AND type in (N'U'))
+-- 1. TẠO BẢNG DỮ LIỆU MÁY ĐO [ExcelData_Import] 
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelData_Import]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE [dbo].[SortingDataImportExcel](
+    CREATE TABLE [dbo].[ExcelData_Import](
         [Id] [int] IDENTITY(1,1) PRIMARY KEY,
         [EquipmentNumber] [nvarchar](100) NULL,
         [SorterNum] [nvarchar](100) NULL,
         [StartTime] [datetime] NULL,
         [WorkflowCode] [nvarchar](100) NULL,
-        [LotNo] [nvarchar](100) NULL, -- Cột bổ sung theo yêu cầu
+        [LotNo] [nvarchar](100) NULL,
         [Barcode] [nvarchar](100) NULL,
         [Slot] [nvarchar](10) NULL,
         [Position] [nvarchar](50) NULL,
@@ -37,17 +36,17 @@ BEGIN
         [DischargeBeginCurrent_mA] [nvarchar](50) NULL,
         [NGInfo] [nvarchar](MAX) NULL,
         [EndTime] [datetime] NULL,
-        [FilePath] [nvarchar](500) NULL, -- Cột quản lý (đường dẫn file)
-        [ImportDate] [datetime] DEFAULT GETDATE() -- Cột quản lý (ngày nạp)
+        [FilePath] [nvarchar](500) NULL,
+        [ImportDate] [datetime] DEFAULT GETDATE()
     );
-    PRINT 'Đã tạo bảng SortingDataImportExcel thành công.';
+    PRINT 'Đã tạo bảng ExcelData_Import thành công.';
 END
 GO
 
--- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ExcelImportHistory]
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelImportHistory]') AND type in (N'U'))
+-- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ExcelHistory_Import]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelHistory_Import]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE [dbo].[ExcelImportHistory](
+    CREATE TABLE [dbo].[ExcelHistory_Import](
         [Id] [int] IDENTITY(1,1) PRIMARY KEY,
         [FilePath] [nvarchar](500) UNIQUE,
         [FileSize] [bigint] NULL,
@@ -56,7 +55,7 @@ BEGIN
         [Status] [nvarchar](30) NULL,
         [ErrorMessage] [nvarchar](MAX) NULL
     );
-    PRINT 'Đã tạo bảng ExcelImportHistory thành công.';
+    PRINT 'Đã tạo bảng ExcelHistory_Import thành công.';
 END
 GO
 
