@@ -82,10 +82,8 @@ namespace ImportData.Services
                 
                 using (SqlCommand cmd = new SqlCommand(sql, conn)) // Chuẩn bị gói lệnh SQL gởi đi.
                 {
-                    // Gán giá trị fileName vào tham số @path một cách an toàn.
-                    // Lưu ý: SQL đang tìm theo FilePath, nhưng ta chỉ nhận fileName từ Form1.
-                    // Ta sẽ sửa lại SQL để tìm theo FileName nếu cần, hoặc truyền FullPath từ Form1.
-                    cmd.Parameters.AddWithValue("@path", fileName); 
+                    // Gán giá trị filePath vào tham số @path một cách an toàn.
+                    cmd.Parameters.AddWithValue("@path", filePath); 
                         
                         // Thực thi lệnh và lấy về một con số duy nhất (ExecuteScalar).
                         int count = (int)await cmd.ExecuteScalarAsync(); 
