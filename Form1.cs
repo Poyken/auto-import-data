@@ -423,7 +423,7 @@ namespace ImportData
                     
                     // Nhắc Thợ Database Hỏi Trong Sổ Lịch SQL có cái Tên file nào Trùng chưa?
                     // Trùng (True) thì chạy câu lệnh (continue) -> Lờ Bỏ nó đi lấy Tệp Tên Kế Tiếp vòng lại. Tiết kiệm không phải Load Lại tệp Xã Hội rác Trùng Cũ!
-                    if (await _dbService.IsFileImportedAsync(fileName)) continue; 
+                    if (await _dbService.IsFileImportedAsync(filePath)) continue; 
 
                     Log($">>> Đang nhập dữ liệu: {fileName}");
                     
