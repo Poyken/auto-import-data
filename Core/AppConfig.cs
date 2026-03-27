@@ -12,18 +12,19 @@ namespace ImportData.Core
     {
         // --- CẤU HÌNH FIX CỨNG (SỬA TẠI ĐÂY) ---
         // 1. Dán chuỗi kết nối Database có mã hóa của bạn vào đây.
-        private const string HARDCODED_CONN = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
+        private const string HARDCODED_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=CapacitorDB;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
         // 2. Đổi thành 'true' để ép buộc App chỉ dùng chuỗi trên, bỏ qua file appsettings.json.
         private const bool USE_HARDCODED_CONN = false; 
 
         // Default connection string if appsettings.json is missing and hardcode is disabled.
-        private const string DEFAULT_DB_CONN = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
+        private const string DEFAULT_DB_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=CapacitorDB;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
         
         // Default folder name.
         private const string DEFAULT_FOLDER = @"task";
 
         public string ConnectionString { get; set; }
         public string BaseFolder { get; set; }
+        public int ScanIntervalSeconds { get; set; } = 600; // Mặc định 10 phút.
         private string _loadedFilePath; // Đường dẫn file đã nạp.
 
         // Thời gian chờ kết nối tối đa (giây) khi health check kiểm tra SQL.
@@ -110,6 +111,13 @@ namespace ImportData.Core
                                 // Giới hạn trong khoảng hợp lý 1-30 giây, tránh user ghi nhầm số âm hoặc quá lớn.
                                 HealthCheckTimeoutSeconds = Math.Max(1, Math.Min(30, val));
                             }
+
+                            // 4. Tìm mục "SyncSettings" và lấy giá trị "ScanIntervalSeconds".
+                            if (root.TryGetProperty("SyncSettings", out var syncSettings) && 
+                                syncSettings.TryGetProperty("ScanIntervalSeconds", out var scanInt))
+                            {
+                                ScanIntervalSeconds = scanInt.GetInt32();
+                            }
                         }
                     }
                     
@@ -143,6 +151,10 @@ namespace ImportData.Core
                     FolderSettings = new
                     {
                         BaseFolder = BaseFolder
+                    },
+                    SyncSettings = new
+                    {
+                        ScanIntervalSeconds = ScanIntervalSeconds
                     },
                     HealthCheckSettings = new
                     {
