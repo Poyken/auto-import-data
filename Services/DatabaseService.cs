@@ -134,8 +134,8 @@ namespace ImportData.Services
                         // SqlBulkCopy: Trình nạp dữ liệu hàng loạt mạnh nhất của C#.
                         using (SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
-                            // Chỉ định tên bảng đích trong Database là "CapacitorLogs".
-                            bulkCopy.DestinationTableName = "CapacitorLogs"; 
+                            // Chỉ định tên bảng đích trong Database là "SortingDataImportExcel".
+                            bulkCopy.DestinationTableName = "SortingDataImportExcel"; 
                             
                             // Định nghĩa danh sách các cột sẽ được map (khớp) từ file Excel sang bảng SQL.
                             // Thứ tự này phải khớp hoàn toàn với cấu trúc bảng trong SQL Server.

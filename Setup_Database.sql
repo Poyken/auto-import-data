@@ -1,50 +1,57 @@
 /* 
-   HƯỚNG DẪN: SCRIPT CẬP NHẬT DATABASE CHO HỆ THỐNG AUTO IMPORT
+   HƯỚNG DẪN: SCRIPT TẠO BẢNG DỮ LIỆU CHO HỆ THỐNG AUTO IMPORT
    ----------------------------------------------------------
-   Mục tiêu: Đảm bảo bảng CapacitorLogs có đủ các cột cần thiết (LotNo, FilePath, ImportDate)
-   và bảng ImportHistory được tạo mới để theo dõi lịch sử nạp file.
+   Mục tiêu: Tạo bảng SortingDataImportExcel (theo cấu trúc máy đo)
+   và bảng ImportHistory để theo dõi lịch sử nạp file.
 */
 
--- Chọn Database mục tiêu để thực thi lệnh
-USE CapacitorDB; 
+-- Chọn Database mục tiêu (Thay đổi nếu dùng tên khác)
+USE SmartFactoryV2; 
 GO
 
--- 1. BỔ SUNG CỘT [LotNo]
--- sys.columns: Bảng hệ thống chứa thông tin toàn bộ cột trong Database.
--- Nếu trong bảng 'CapacitorLogs' chưa có cột tên là 'LotNo' thì mới tiến hành thêm.
-IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CapacitorLogs') AND name = 'LotNo')
+-- 1. TẠO BẢNG CHỨA DỮ LIỆU MÁY ĐO [SortingDataImportExcel]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SortingDataImportExcel]') AND type in (N'U'))
 BEGIN
-    ALTER TABLE [dbo].[CapacitorLogs] ADD [LotNo] [nvarchar](100) NULL;
-    PRINT 'Đã thêm thành công cột LotNo vào bảng CapacitorLogs.';
+    CREATE TABLE [dbo].[SortingDataImportExcel](
+        [Id] [int] IDENTITY(1,1) PRIMARY KEY,
+        [EquipmentNumber] [nvarchar](100) NULL,
+        [SorterNum] [nvarchar](100) NULL,
+        [StartTime] [datetime] NULL,
+        [WorkflowCode] [nvarchar](100) NULL,
+        [LotNo] [nvarchar](100) NULL, -- Cột bổ sung theo yêu cầu
+        [Barcode] [nvarchar](100) NULL,
+        [Slot] [nvarchar](10) NULL,
+        [Position] [nvarchar](50) NULL,
+        [Channel] [int] NULL,
+        [Capacity_mAh] [nvarchar](50) NULL,
+        [Capacitance_F] [nvarchar](50) NULL,
+        [BeginVoltageSD_mV] [nvarchar](50) NULL,
+        [ChargeEndCurrent_mA] [nvarchar](50) NULL,
+        [EndVoltage_mV] [nvarchar](50) NULL,
+        [EndCurrent_mA] [nvarchar](50) NULL,
+        [DischargeVoltage1_mV] [nvarchar](50) NULL,
+        [DischargeVoltage1_Time] [nvarchar](50) NULL,
+        [DischargeVoltage2_mV] [nvarchar](50) NULL,
+        [DischargeVoltage2_Time] [nvarchar](50) NULL,
+        [DischargeBeginVoltage_mV] [nvarchar](50) NULL,
+        [DischargeBeginCurrent_mA] [nvarchar](50) NULL,
+        [NGInfo] [nvarchar](MAX) NULL,
+        [EndTime] [datetime] NULL,
+        [FilePath] [nvarchar](500) NULL, -- Cột quản lý (đường dẫn file)
+        [ImportDate] [datetime] DEFAULT GETDATE() -- Cột quản lý (ngày nạp)
+    );
+    PRINT 'Đã tạo bảng SortingDataImportExcel thành công.';
 END
 GO
 
--- 2. BỔ SUNG CÁC CỘT QUẢN LÝ (FilePath, ImportDate)
--- FilePath: Lưu đường dẫn đầy đủ của file nạp, giúp truy vết sau này.
-IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CapacitorLogs') AND name = 'FilePath')
-BEGIN
-    ALTER TABLE [dbo].[CapacitorLogs] ADD [FilePath] [nvarchar](500) NULL;
-    PRINT 'Đã thêm cột FilePath.';
-END
-
--- ImportDate: Lưu ngày giờ thực hiện nạp dữ liệu (Mặc định lấy giờ hệ thống SQL).
-IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CapacitorLogs') AND name = 'ImportDate')
-BEGIN
-    ALTER TABLE [dbo].[CapacitorLogs] ADD [ImportDate] [datetime] DEFAULT GETDATE();
-    PRINT 'Đã thêm cột ImportDate.';
-END
-GO
-
--- 3. KHỞI TẠO BẢNG [ImportHistory]
--- Bảng này cực kỳ quan trọng: App sẽ dựa vào đây để biết file nào đã nạp rồi, 
--- tránh việc nạp trùng lặp dữ liệu khi App quét lại folder.
+-- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ImportHistory]
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ImportHistory]') AND type in (N'U'))
 BEGIN
     CREATE TABLE [dbo].[ImportHistory](
-        [Id] [int] IDENTITY(1,1) PRIMARY KEY,     -- Mã định danh tự tăng
-        [FileName] [nvarchar](500) UNIQUE,        -- Tên file (Duy nhất, không cho phép trùng)
-        [FilePath] [nvarchar](max) NULL,          -- Đường dẫn file
-        [ImportTime] [datetime] DEFAULT GETDATE() -- Thời gian nạp
+        [Id] [int] IDENTITY(1,1) PRIMARY KEY,
+        [FileName] [nvarchar](500) UNIQUE,
+        [FilePath] [nvarchar](max) NULL,
+        [ImportTime] [datetime] DEFAULT GETDATE()
     );
     PRINT 'Đã tạo bảng ImportHistory thành công.';
 END
