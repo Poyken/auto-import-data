@@ -8,6 +8,9 @@
     <!-- Nền tảng đích: Sử dụng .NET mới nhất dành cho Windows. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     
+    <!-- Icon của ứng dụng -->
+    <ApplicationIcon>app_icon.ico</ApplicationIcon>
+    
     <!-- Cho phép kiểm tra biến rỗng (Null) để tránh lỗi văng App bất ngờ. -->
     <Nullable>enable</Nullable>
     
@@ -19,6 +22,9 @@
     
     <!-- Không tính các tệp trong thư mục Test vào dự án chính khi đóng gói sản phẩm. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);ImportData.Tests\**</DefaultItemExcludes>
+    
+    <!-- Hỗ trợ đóng gói Self-Contained cho Windows 64-bit -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
  
   <ItemGroup>
@@ -38,6 +44,10 @@
   <ItemGroup>
     <!-- Yêu cầu Windows luôn sao chép file cấu hình appsettings.json ra thư mục chạy để App tìm thấy. -->
     <Content Include="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="app_icon.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

@@ -10,7 +10,13 @@ namespace ImportData.Core
     /// </summary>
     public class AppConfig
     {
-        // Default connection string if appsettings.json is missing.
+        // --- CẤU HÌNH FIX CỨNG (SỬA TẠI ĐÂY) ---
+        // 1. Dán chuỗi kết nối Database có mã hóa của bạn vào đây.
+        private const string HARDCODED_CONN = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
+        // 2. Đổi thành 'true' để ép buộc App chỉ dùng chuỗi trên, bỏ qua file appsettings.json.
+        private const bool USE_HARDCODED_CONN = false; 
+
+        // Default connection string if appsettings.json is missing and hardcode is disabled.
         private const string DEFAULT_DB_CONN = @"Server=.;Database=CapacitorDB;Integrated Security=True;TrustServerCertificate=True;";
         
         // Default folder name.
@@ -18,6 +24,7 @@ namespace ImportData.Core
 
         public string ConnectionString { get; set; }
         public string BaseFolder { get; set; }
+        private string _loadedFilePath; // Đường dẫn file đã nạp.
 
         // Thời gian chờ kết nối tối đa (giây) khi health check kiểm tra SQL.
         // Mặc định 5 giây, user có thể chỉnh trong appsettings.json mục HealthCheckSettings.ConnectionTimeoutSeconds.
@@ -28,7 +35,9 @@ namespace ImportData.Core
         /// </summary>
         public AppConfig() 
         {
-            ConnectionString = DEFAULT_DB_CONN;
+            // Nếu chọn Fix cứng thì dùng luôn, không thì dùng mặc định tạm thời.
+            ConnectionString = USE_HARDCODED_CONN ? HARDCODED_CONN : DEFAULT_DB_CONN;
+            
             // Set default base folder to Desktop/task.
             BaseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), DEFAULT_FOLDER); 
         }
@@ -54,6 +63,7 @@ namespace ImportData.Core
 
                 // Kiểm tra xem file ở đâu tồn tại thì dùng file đó (Ưu tiên file ở thư mục Source để tiện chỉnh sửa khi Code).
                 string targetFile = File.Exists(sourceSettingsPath) ? sourceSettingsPath : settingsPath; 
+                _loadedFilePath = targetFile; // Ghi nhớ đường dẫn để xíu nữa Save đè vào đúng chỗ này.
 
                 // Nếu tìm thấy file cấu hình thì bắt đầu nạp.
                 if (File.Exists(targetFile))
@@ -76,7 +86,8 @@ namespace ImportData.Core
                             var root = doc.RootElement; // Lấy phần tử gốc của file Json.
                             
                             // 1. Tìm mục "ConnectionStrings" và lấy giá trị "DefaultConnection".
-                            if (root.TryGetProperty("ConnectionStrings", out var connStrings) && 
+                            if (!USE_HARDCODED_CONN && 
+                                root.TryGetProperty("ConnectionStrings", out var connStrings) && 
                                 connStrings.TryGetProperty("DefaultConnection", out var defaultConn))
                             {
                                 // Gán chuỗi kết nối Database, nếu trong file bị null thì giữ nguyên giá trị mặc định cũ.
@@ -110,6 +121,47 @@ namespace ImportData.Core
             {
                 // Bỏ qua lỗi: Nếu file cấu hình hỏng, App sẽ dùng thông số cũ hoặc mặc định để tiếp tục sống.
                 // Ứng dụng sẽ tự động thử nạp lại sau một chu kỳ 10 giây khác.
+            }
+        }
+
+        /// <summary>
+        /// Lưu cấu hình hiện tại xuống file appsettings.json.
+        /// </summary>
+        public void Save()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_loadedFilePath)) return;
+
+                // Tạo đối tượng JSON để lưu.
+                var configData = new
+                {
+                    ConnectionStrings = new
+                    {
+                        DefaultConnection = ConnectionString
+                    },
+                    FolderSettings = new
+                    {
+                        BaseFolder = BaseFolder
+                    },
+                    HealthCheckSettings = new
+                    {
+                        ConnectionTimeoutSeconds = HealthCheckTimeoutSeconds
+                    }
+                };
+
+                // Chuyển đối tượng thành chuỗi JSON đẹp mắt.
+                string json = System.Text.Json.JsonSerializer.Serialize(configData, new System.Text.Json.JsonSerializerOptions 
+                { 
+                    WriteIndented = true 
+                });
+
+                // Ghi đè vào file.
+                File.WriteAllText(_loadedFilePath, json);
+            }
+            catch (Exception)
+            {
+                // Lờ đi nếu không lưu được (ví dụ file đang bị khóa cứng).
             }
         }
     }

@@ -177,7 +177,7 @@ namespace ImportData.Services
                     {
                         // Nếu có bất kỳ lỗi gì xảy ra (mất mạng, SQL đầy ổ cứng...), lệnh Rollback sẽ xóa sạch những gì vừa nạp dang dở.
                         trans.Rollback(); 
-                        _logger?.Invoke($"[ERROR] Import failed {dt.Rows.Count} rows from {fileName}"); 
+                        _logger?.Invoke($"[LỖI] Nạp dữ liệu thất bại {dt.Rows.Count} dòng từ {fileName}"); 
                         throw; // Quăng lỗi ra ngoài để hàm cha (Form1) xử lý tiếp.
                     }
                 }

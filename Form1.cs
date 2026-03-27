@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using System;
 using System.IO;
 using System.Linq;
@@ -6,7 +7,6 @@ using System.Windows.Forms;
 using System.Drawing;
 using ImportData.Core;
 using ImportData.Services;
-using ImportData.Helpers;
 
 namespace ImportData
 {
@@ -68,7 +68,7 @@ namespace ImportData
             // Cài đặt thông số cho biểu tượng dưới khay đồng hồ.
             _trayIcon = new NotifyIcon()
             {
-                Icon = SystemIcons.Information,
+                Icon = this.Icon, // Lấy cùng icon với cửa sổ chính để đồng bộ thương hiệu.
                 Text = "Dịch vụ Auto Import (Đang chạy)",
                 Visible = true
             };
@@ -98,6 +98,9 @@ namespace ImportData
             
             // Cứ mỗi 10 giây, đồng hồ kêu Tick, ta gọi hàm PerformHealthCheckLoopAsync để khám sức khỏe tổng chẩn.
             _healthTimer.Tick += async (s, ev) => await PerformHealthCheckLoopAsync(); 
+            
+            // Tự động đăng ký với Windows để khởi động cùng hệ thống ở lần chạy đầu tiên.
+            SetStartup();
             
             await PerformHealthCheckLoopAsync(); // Chạy khám sức khỏe lần đầu tiên ngay lúc này.
             _healthTimer.Start(); // Khởi động đồng hồ.
@@ -138,7 +141,7 @@ namespace ImportData
             // Kịch bản 1: Nếu ứng dụng Khỏe, mà người dùng lại vừa vào appsettings.json đổi tên thư mục Máy Đo sang thư mục khác.
             if (_isSystemHealthy && oldFolder != _config.BaseFolder)
             {
-                Log($"Monitoring folder: {_config.BaseFolder}"); 
+                Log($">>> Thư mục theo dõi: {_config.BaseFolder}"); 
                 InitWatcher(); 
                 await PerformSyncAsync(); 
             }
@@ -152,7 +155,7 @@ namespace ImportData
                     // Nếu trước đó đang lỗi (_lastState != "") mà giờ khỏe lại → thông báo phục hồi.
                     if (_lastState != "")
                     {
-                        Log("[SUCCESS] System reconnected.");
+                        Log("✔ Đã kết nối lại hệ thống.");
                     }
                     UpdateStatus("Hệ thống Sẵn sàng", Color.Green);
                     
@@ -203,6 +206,32 @@ namespace ImportData
             }
         }
 
+        // Sự kiện: Khi người dùng nhấn nút "Đổi thư mục" trên thanh công cụ.
+        // Mở hộp thoại chọn thư mục mới, cập nhật cấu hình và khởi động lại watcher.
+        private async void BtnChangeFolder_Click(object sender, EventArgs e)
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "Chọn thư mục chứa file Excel từ máy đo";
+                dialog.SelectedPath = _config.BaseFolder;
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    _config.BaseFolder = dialog.SelectedPath;
+                    _config.Save(); // Lưu lại vào file appsettings.json
+                    
+                    Log($"Đã đổi thư mục theo dõi: {_config.BaseFolder}");
+                    
+                    // Khám sức khỏe hệ thống ngay lập tức để cập nhật dòng chữ "Lỗi đường dẫn".
+                    await PerformHealthCheckLoopAsync();
+
+                    // Khởi động lại watcher với thư mục mới và đồng bộ ngay.
+                    InitWatcher();
+                    await PerformSyncAsync();
+                }
+            }
+        }
+
         // Hàm cập nhật dòng chữ Trạng Thái (Màu vàng, đỏ, xanh).
         private void UpdateStatus(string message, Color color)
         {
@@ -222,47 +251,39 @@ namespace ImportData
         {
             if (e.Index < 0) return;
 
-            string text = lstLogs.Items[e.Index].ToString(); // Bốc dòng chữ tại vị trí dòng số mấy ra.
+            string text = lstLogs.Items[e.Index].ToString(); 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
             // --- PHẦN 1: VẼ NỀN ---
             if (isSelected)
             {
-                // Màu nền khi được chọn (Focus): Dùng màu Xám Slate tối (Gần với Đen) để làm nổi bật dòng mà không gây chói.
-                using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(40, 40, 45)))
+                // Màu nền xanh Navy khi chọn (chuẩn Windows highlight)
+                using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(0, 120, 215))) 
                 {
                     e.Graphics.FillRectangle(backBrush, e.Bounds);
-                }
-                
-                // Vẽ một "Thanh Nhấn" (Accent Bar) màu xanh sáng ở mép trái để nhận diện dòng đang chọn.
-                using (SolidBrush accentBrush = new SolidBrush(Color.FromArgb(0, 255, 255)))
-                {
-                    e.Graphics.FillRectangle(accentBrush, e.Bounds.X, e.Bounds.Y, 4, e.Bounds.Height);
                 }
             }
             else
             {
-                // Màu nền mặc định (Đen sâu thẳm).
                 e.Graphics.FillRectangle(Brushes.Black, e.Bounds);
             }
 
-            // --- PHẦN 2: QUYẾT ĐỊNH MÀU CHỮ ---
-            // GIỮ NGUYÊN MÀU GỐC: Không đổi sang màu Trắng khi focus để đảm bảo dữ liệu quan trọng ([LỖI], [OK]) luôn dễ nhận biết.
-            Brush textBrush = Brushes.LimeGreen; // Mặc định dùng Xanh Lime.
+            // --- PHẦN 2: PHÂN TÁCH VÀ VẼ CHỮ ---
+            int timeEndIndex = text.IndexOf(']');
+            string timeStr = timeEndIndex > 0 ? text.Substring(0, timeEndIndex + 1) : "";
+            string msgStr = timeEndIndex > 0 ? text.Substring(timeEndIndex + 1) : text;
 
-            // Tìm từ khóa để đổi màu nhấn mạnh theo đúng ý nghĩa thông báo.
-            if (text.Contains("[LỖI") || text.Contains("[ERROR]")) textBrush = Brushes.Red;
-            else if (text.Contains("[THAY ĐỔI") || text.Contains("Phát hiện mới")) textBrush = Brushes.Yellow;
-
-            // --- PHẦN 3: VẼ CHỮ ---
-            // Căn lề trái cách ra một chút (X + 8) để không bị đè lên Thanh Nhấn.
-            Rectangle textBounds = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+            // 🎨 MÀU SẮC THEO YÊU CẦU:
+            // - Bình thường: Toàn bộ là Xanh Lime (bao gồm cả thời gian)
+            // - Được Focus: Toàn bộ là Trắng
             
-            // Sử dụng StringFormat để căn giữa chữ theo chiều dọc cho cân đối.
-            using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
-            {
-                e.Graphics.DrawString(text, e.Font, textBrush, textBounds, sf);
-            }
+            Brush textBrush = isSelected ? Brushes.White : Brushes.Lime;
+
+            // Vẽ thời gian
+            e.Graphics.DrawString(timeStr, e.Font, textBrush, new PointF(e.Bounds.X + 5, e.Bounds.Y + 2));
+
+            // Vẽ nội dung (cách ra 110px để thẳng hàng và dễ nhìn hơn)
+            e.Graphics.DrawString(msgStr, e.Font, textBrush, new PointF(e.Bounds.X + 110, e.Bounds.Y + 2));
         }
 
         // Hàm Ghi Log, đẩy dòng chữ mới vào danh sách ListBox.
@@ -289,6 +310,10 @@ namespace ImportData
         // Hàm kích hoạt cắm cảm biến trực tiếp vào hệ thống File của HDH Windows.
         private void InitWatcher()
         {
+            // HỦY WATCHER CŨ TRƯỚC: Tránh rò rỉ tài nguyên khi InitWatcher() được gọi nhiều lần.
+            // Nếu không hủy, watcher cũ vẫn sống ngầm trong RAM và bắn event trùng lặp.
+            StopWatcher();
+
             // Tránh thư mục lõi mất thì Windows sẽ bắn lỗi với Watcher. Create Directory bảo toàn trước.
             if (!Directory.Exists(_config.BaseFolder)) 
             {
@@ -319,11 +344,9 @@ namespace ImportData
             string ext = Path.GetExtension(e.FullPath).ToLower();
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
-            // Xử lý bộ máy đo lường hay ngốc nghếch viết đè dòng ngày hôm qua của dự án cũ. 
-            // Cắt ra chỉ theo dõi thư mục yyyy-MM-dd là ĐÚNG ngày hôm Nay. Còn không phải thì Không cất công lọc nó.
+            // Cắt ra chỉ theo dõi thư mục yyyy-MM-dd là ĐÚNG ngày hôm Nay.
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
-            string folderName = Path.GetFileName(Path.GetDirectoryName(e.FullPath));
-            if (folderName != todayFolder) return;
+            if (!e.FullPath.Contains(todayFolder)) return; 
 
             // Biến bảo vệ Cờ _isProcessing chống hiện tượng Race Condition (Tranh đồ ăn).
             // Do máy đo sẽ nổ phát nhiều event Changed liên tục 1 mili giây. Phải khóa lại để Hàm xử lý an tâm nuốt trọn xong 1 cục tệp.
@@ -379,14 +402,18 @@ namespace ImportData
             string sourceFolder = Path.Combine(_config.BaseFolder, todayFolder);
             
             // Xóa sổ, ngày hôm nay chưa mở máy Lập trình Đo đạc thì thư mục chắc chắn chưa tồn. Ngưng quét Tốn Nhịp.
-            if (!Directory.Exists(sourceFolder)) return; 
+            if (!Directory.Exists(sourceFolder)) 
+            {
+                UpdateStatus("Đang chờ thư mục: " + todayFolder, Color.White);
+                return;
+            }
 
             UpdateStatus("Đang đồng bộ...", Color.Yellow); 
 
             try
             {
-                // Quét rải rác thu lấy toàn bộ File Mọi Kiểu (*.*) ở tận hang hốc thư mục, sau đó dùng bộ Lưới Linq lọc giặt (Where) ra riêng loại tệp chữ Excel rớt gọn cho Mảng list.
-                string[] files = Directory.GetFiles(sourceFolder, "*.*")
+                // Quét rải rác thu lấy toàn bộ File Mọi Kiểu (*.*) ở tận hang hốc thư mục (AllDirectories).
+                string[] files = Directory.GetFiles(sourceFolder, "*.*", SearchOption.AllDirectories)
                     .Where(s => s.EndsWith(".xlsx") || s.EndsWith(".xls") || s.EndsWith(".xlsm"))
                     .ToArray();
 
@@ -398,11 +425,20 @@ namespace ImportData
                     // Trùng (True) thì chạy câu lệnh (continue) -> Lờ Bỏ nó đi lấy Tệp Tên Kế Tiếp vòng lại. Tiết kiệm không phải Load Lại tệp Xã Hội rác Trùng Cũ!
                     if (await _dbService.IsFileImportedAsync(fileName)) continue; 
 
-                    Log($"Importing: {fileName}");
+                    Log($">>> Đang nhập dữ liệu: {fileName}");
                     
-                    bool success = await ProcessSingleFileAsync(filePath, fileName);
+                    // Triệu hồi ExcelService: Nuốt chửng nguyên file vật lý châm thành 1 bộ Data Lưới Table Phẳng lì đẹp mắt!.
+                    var dt = _excelService.ReadExcelFile(filePath);
+                    // Trường hợp file khuyết Null, Mất Nàng hay rỗng không hàng cột nào. Dừng Cuộc Chơi Cho Nó Bãi!
+                    if (dt == null || dt.Rows.Count == 0)
+                    {
+                        Log($"[LỖI] Tệp {fileName} rỗng hoặc không đọc được.");
+                        continue;
+                    }
+
+                    bool success = await _dbService.ExecuteImportBatchAsync(dt, fileName, filePath) > 0;
                     
-                    if (!success) Log($"[ERROR] {fileName} failed.");
+                    if (!success) Log($"[LỖI] Nhập tệp {fileName} thất bại.");
                 }
                 
                 UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 
@@ -410,7 +446,7 @@ namespace ImportData
             catch (Exception)
             {
                 UpdateStatus("Lỗi đồng bộ", Color.Red); 
-                Log("[ERROR] Sync failed."); 
+                Log("[LỖI] Đồng bộ dữ liệu thất bại."); 
             }
         }
 
@@ -433,8 +469,32 @@ namespace ImportData
             }
             catch (Exception)
             {
-                Log($"[ERROR] Processing {fileName} failed."); 
+                Log($"[LỖI] Xử lý file {fileName} thất bại."); 
                 return false;
+            }
+        }
+        /// <summary>
+        /// Hàm SetStartup: Tự động thêm ứng dụng vào Windows Startup (Registry).
+        /// Giúp phần mềm tự khởi động cùng máy tính vào các lần sau.
+        /// </summary>
+        private void SetStartup()
+        {
+            try 
+            {
+                // Truy cập vào Registry mục Run của người dùng hiện tại (HKCU).
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (key != null)
+                    {
+                        // Đặt giá trị AutoImportData là đường dẫn vật lý của file .exe đang chạy.
+                        key.SetValue("AutoImportData", Application.ExecutablePath);
+                    }
+                }
+            }
+            catch (Exception ex) 
+            {
+                // Nếu bị chặn bởi Antivirus, ta liệt kê lỗi ra Log để người dùng biết.
+                Log($"[CẢNH BÁO] Không thể thiết lập tự khởi động: {ex.Message}");
             }
         }
     }

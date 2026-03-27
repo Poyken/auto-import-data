@@ -29,14 +29,49 @@ namespace ImportData
         private void InitializeComponent()
         {
             // Khởi tạo các đối tượng điều khiển (Controls) trên giao diện.
+            this.toolStrip1 = new System.Windows.Forms.ToolStrip();
+            this.btnChangeFolder = new System.Windows.Forms.ToolStripButton();
+            this.lblTeamName = new System.Windows.Forms.ToolStripLabel();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip(); 
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel(); 
             this.lstLogs = new System.Windows.Forms.ListBox(); 
             
             // Tạm dừng việc vẽ giao diện để thiết lập các thông số (Layout).
+            this.toolStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout(); 
             this.SuspendLayout(); 
-            
+
+            // --- THIẾT LẬP THANH CÔNG CỤ (toolStrip1) ---
+            // Đặt ở phía trên cùng của cửa sổ, chứa nút "Đổi thư mục" và tên đội nhóm.
+            this.toolStrip1.BackColor = System.Drawing.Color.FromArgb(45, 45, 48);
+            this.toolStrip1.GripStyle = System.Windows.Forms.ToolStripGripStyle.Hidden;
+            this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+                this.btnChangeFolder
+            });
+            this.toolStrip1.Location = new System.Drawing.Point(0, 0);
+            this.toolStrip1.Name = "toolStrip1";
+            this.toolStrip1.Size = new System.Drawing.Size(784, 30);
+            this.toolStrip1.TabIndex = 2;
+            this.toolStrip1.Renderer = new DarkToolStripRenderer();
+
+            // --- NÚT ĐỔI THƯ MỤC (btnChangeFolder) ---
+            // Nút bấm cho phép người dùng chọn thư mục quét máy đo mới.
+            this.btnChangeFolder.ForeColor = System.Drawing.Color.White;
+            this.btnChangeFolder.Image = null;
+            this.btnChangeFolder.Name = "btnChangeFolder";
+            this.btnChangeFolder.Size = new System.Drawing.Size(90, 22);
+            this.btnChangeFolder.Text = "📁 Đổi thư mục";
+            this.btnChangeFolder.Click += new System.EventHandler(this.BtnChangeFolder_Click);
+
+            // --- NHÃN TÊN ĐỘI (lblTeamName) ---
+            // Hiển thị tên đội phát triển bên phải thanh công cụ.
+            this.lblTeamName.Alignment = System.Windows.Forms.ToolStripItemAlignment.Right;
+            this.lblTeamName.ForeColor = System.Drawing.Color.FromArgb(120, 120, 120);
+            this.lblTeamName.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Italic);
+            this.lblTeamName.Name = "lblTeamName";
+            this.lblTeamName.Size = new System.Drawing.Size(140, 22);
+            this.lblTeamName.Text = "Vietnam Develop EA Team";
+
             // --- THIẾT LẬP THANH TRẠNG THÁI (statusStrip1) ---
             // Đặt màu nền tối (Gần đen) cho thanh trạng thái nằm dưới chân ứng dụng.
             this.statusStrip1.BackColor = System.Drawing.Color.FromArgb(30, 30, 30); 
@@ -61,7 +96,8 @@ namespace ImportData
             
             // Kích thước và nội dung chữ hiển thị ban đầu.
             this.lblStatus.Size = new System.Drawing.Size(115, 17);
-            this.lblStatus.Text = "Hệ thống sẵn sàng";
+            this.lblStatus.Text = "Đang chờ thư mục: " + DateTime.Now.ToString("yyyy-MM-dd");
+            this.lblStatus.Margin = new System.Windows.Forms.Padding(5, 3, 0, 2);
             
             // --- THIẾT LẬP BẢNG NHẬT KÝ (lstLogs) ---
             // Đặt màu nền đen sâu thẳm giống màn hình Hacker.
@@ -82,10 +118,10 @@ namespace ImportData
             
             // Cho phép xuất hiện thanh cuộn ngang nếu dòng log quá dài.
             this.lstLogs.HorizontalScrollbar = true; 
-            this.lstLogs.ItemHeight = 15;
-            this.lstLogs.Location = new System.Drawing.Point(0, 0);
+            this.lstLogs.ItemHeight = 22;
+            this.lstLogs.Location = new System.Drawing.Point(0, 25);
             this.lstLogs.Name = "lstLogs";
-            this.lstLogs.Size = new System.Drawing.Size(784, 419);
+            this.lstLogs.Size = new System.Drawing.Size(784, 394);
             this.lstLogs.TabIndex = 1;
             
             // --- THIẾT LẬP CỬA SỔ CHÍNH (Form1) ---
@@ -99,15 +135,19 @@ namespace ImportData
             this.ClientSize = new System.Drawing.Size(784, 441); 
             
             // Gắn các điều khiển đã tạo ở trên vào khung cửa sổ.
+            // Thứ tự Add quan trọng: lstLogs (Fill) phải thêm trước, toolStrip (Top) và statusStrip (Bottom) thêm sau.
             this.Controls.Add(this.lstLogs);
+            this.Controls.Add(this.toolStrip1);
             this.Controls.Add(this.statusStrip1);
             this.Name = "Form1";
             
             // CenterScreen: Yêu cầu khi bật App lên thì nó tự nhảy vào chính giữa màn hình máy tính.
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Dashboard: Hệ thống Auto Import Capacitor Data";
+            this.Text = "Vietnam Develop EA Team";
             
             // Tiếp tục vẽ lại giao diện sau khi đã thiết lập xong xuôi.
+            this.toolStrip1.ResumeLayout(false);
+            this.toolStrip1.PerformLayout();
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
             this.ResumeLayout(false);
@@ -117,9 +157,35 @@ namespace ImportData
         #endregion
 
         // Khai báo các biến đại diện cho các thành phần trên giao diện.
-        private System.Windows.Forms.StatusStrip statusStrip1;       // Thanh ngang chứa trạng thái ở dưới.
-        private System.Windows.Forms.ToolStripStatusLabel lblStatus; // Dòng chữ hiển thị kết quả (OK/Lỗi).
-        private System.Windows.Forms.ListBox lstLogs;                // Bảng hiển thị danh sách nhật ký nạp file.
+        private System.Windows.Forms.ToolStrip toolStrip1;               // Thanh công cụ phía trên.
+        private System.Windows.Forms.ToolStripButton btnChangeFolder;    // Nút đổi thư mục quét.
+        private System.Windows.Forms.ToolStripLabel lblTeamName;         // Nhãn tên đội phát triển (bên phải).
+        private System.Windows.Forms.StatusStrip statusStrip1;           // Thanh ngang chứa trạng thái ở dưới.
+        private System.Windows.Forms.ToolStripStatusLabel lblStatus;     // Dòng chữ hiển thị kết quả (OK/Lỗi).
+        private System.Windows.Forms.ListBox lstLogs;                    // Bảng hiển thị danh sách nhật ký nạp file.
+    }
+
+    /// <summary>
+    /// Lớp tùy chỉnh Renderer cho ToolStrip: Giúp thanh công cụ có nền tối đồng bộ với giao diện Hacker.
+    /// Xóa bỏ đường viền mặc định xấu xí của Windows.
+    /// </summary>
+    public class DarkToolStripRenderer : System.Windows.Forms.ToolStripProfessionalRenderer
+    {
+        protected override void OnRenderToolStripBorder(System.Windows.Forms.ToolStripRenderEventArgs e)
+        {
+            // Không vẽ đường viền → Thanh công cụ nằm phẳng liền mạch với giao diện.
+        }
+
+        protected override void OnRenderButtonBackground(System.Windows.Forms.ToolStripItemRenderEventArgs e)
+        {
+            if (e.Item.Selected || e.Item.Pressed)
+            {
+                // Vẽ nền khi di chuột qua hoặc nhấn nút (Màu xanh đen nhẹ).
+                using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60, 60, 70)))
+                {
+                    e.Graphics.FillRectangle(brush, 0, 0, e.Item.Width, e.Item.Height);
+                }
+            }
+        }
     }
 }
-

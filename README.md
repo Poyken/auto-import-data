@@ -2,33 +2,31 @@
 
 Đây là ứng dụng chạy ngầm trên Windows nhằm tự động quét và nhập dữ liệu từ các tệp Excel kết quả vào cơ sở dữ liệu SQL Server.
 
-## 🚀 Tính năng chính
+## 📦 Hướng dẫn mang sang máy khác (Deployment)
 
-1.  **Theo dõi thời gian thực**: Sử dụng `FileSystemWatcher` để phát hiện ngay lập tức khi có tệp Excel mới được tạo trong thư mục mục tiêu.
-2.  **Xử lý thông minh**: 
-    *   Chỉ xử lý các tệp trong thư mục của ngày hiện tại (`yyyy-MM-dd`).
-    *   Tự động kiểm tra lịch sử (`ImportHistory`) để đảm bảo không nhập trùng lặp một tệp nhiều lần.
-3.  **Chạy ngầm chuyên nghiệp**:
-    *   Tự động khởi động cùng Windows (Registry).
-    *   Khi nhấn nút "X", ứng dụng sẽ thu nhỏ xuống Taskbar thay vì thoát hoàn toàn.
-4.  **Dashboard Nhật ký**: Hiển thị trạng thái và quá trình xử lý theo thời gian thực để người dùng dễ dàng theo dõi.
+Đây là cách nhanh nhất và ổn định nhất để cài đặt trên máy tính mới:
 
-## 🛠 Hướng dẫn cài đặt
-
-1.  **Cơ sở dữ liệu**:
-    *   Mở SQL Server Management Studio (SSMS).
-    *   Chạy file `Setup_Database.sql` để tạo database `CapacitorDB` và các bảng cần thiết.
-2.  **Cấu hình**:
-    *   Mở file `appsettings.json`.
-    *   Cập nhật `DefaultConnection` cho phù hợp với Server SQL của bạn.
-    *   Cập nhật `BaseFolder` đến thư mục chứa các file Excel đầu ra từ máy đo.
-
-## 📁 Cấu trúc dự án
-
-- **Program.cs**: Điểm khởi đầu của ứng dụng.
-- **Form1.cs**: Chứa toàn bộ logic xử lý chính (Quét file, đọc Excel, ghi DB).
-- **Setup_Database.sql**: Script khởi tạo cơ sở dữ liệu.
-- **appsettings.json**: File cấu hình tham số hệ thống.
+1.  **Chuẩn bị file**: Copy file duy nhất [ImportData.exe](dist/SingleFile/ImportData.exe) (Bản Single-File) và file `appsettings.json` vào máy tính mới.
+2.  **Cơ sở dữ liệu**: Chạy file `Setup_Database.sql` trên SQL Server của máy đích để tạo bảng.
+3.  **Cấu hình**: Mở `appsettings.json` và chỉnh:
+    - `DefaultConnection`: IP/Tên SQL Server của máy mới.
+    - `BaseFolder`: Thư mục chứa file Excel của máy đo mới.
+4.  **Chạy**: Nhấp đúp vào `ImportData.exe`. Ứng dụng sẽ tự động chạy và thu nhỏ xuống khay đồng hồ.
 
 ---
-*Dự án được phát triển để tối ưu hóa quy trình nhập liệu thủ công sang tự động.*
+
+## 🧹 Cách dọn dẹp Source Code (Cleanup)
+
+Để có bộ mã nguồn sạch nhất, bạn chỉ cần giữ lại các thư mục/file sau:
+- **Thư mục**: `Core`, `Services`.
+- **File mã nguồn**: `Program.cs`, `Form1.cs`, `Form1.Designer.cs`, `Form1.resx`.
+- **File cấu hình & DB**: `ImportData.csproj`, `appsettings.json`, `Setup_Database.sql`, `app_icon.ico`.
+
+*Bạn có thể xóa hoàn toàn các thư mục `bin`, `obj`, `.vs` và `dist` khi muốn lưu trữ mã nguồn sạch.*
+
+---
+
+## 🛠 Tính năng kỹ thuật
+- **Log Xanh (Hacker Style)**: Giờ đây đã có khoảng cách 110px giúp bạn dễ đọc giờ và nội dung log.
+- **Trạng thái tức thì**: Khi bạn bấm "Đổi thư mục", lỗi "Lỗi đường dẫn" sẽ biến mất ngay lập tức nếu đường dẫn đúng.
+- **Tự lưu cấu hình**: Bạn đổi thư mục trong giao diện, ứng dụng sẽ tự lưu vào file để không bị mất khi khởi động lại.
