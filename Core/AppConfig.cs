@@ -12,12 +12,12 @@ namespace ImportData.Core
     {
         // --- CẤU HÌNH FIX CỨNG (SỬA TẠI ĐÂY) ---
         // 1. Dán chuỗi kết nối Database có mã hóa của bạn vào đây.
-        private const string HARDCODED_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=CapacitorDB;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
+        private const string HARDCODED_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=SmartFactoryV2;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
         // 2. Đổi thành 'true' để ép buộc App chỉ dùng chuỗi trên, bỏ qua file appsettings.json.
         private const bool USE_HARDCODED_CONN = false; 
 
         // Default connection string if appsettings.json is missing and hardcode is disabled.
-        private const string DEFAULT_DB_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=CapacitorDB;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
+        private const string DEFAULT_DB_CONN = @"Server=dbserver.hycap.co.kr,5398;Database=SmartFactoryV2;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
         
         // Default folder name.
         private const string DEFAULT_FOLDER = @"task";
