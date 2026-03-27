@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.IO;
 using System;
 using System.Data;
 using System.Threading.Tasks;
@@ -75,13 +76,14 @@ namespace ImportData.Services
                 {
                     await conn.OpenAsync(); // Mở kết nối.
                     
-                    // Câu lệnh SQL: Đếm (COUNT) xem có dòng nào trong bảng ImportHistory có tên file khớp với biến @name không.
-                    string sql = "SELECT COUNT(*) FROM ImportHistory WHERE FileName = @name";
-                    
-                    using (SqlCommand cmd = new SqlCommand(sql, conn)) // Chuẩn bị gói lệnh SQL gởi đi.
-                    {
-                        // Gán giá trị fileName vào tham số @name một cách an toàn (chống SQL Injection).
-                        cmd.Parameters.AddWithValue("@name", fileName); 
+                // Câu lệnh SQL: Đếm (COUNT) xem có dòng nào trong bảng ExcelImportHistory có đường dẫn file khớp không.
+                // Chỉ tính các file đã nạp thành công (Status = 'Success').
+                string sql = "SELECT COUNT(*) FROM ExcelImportHistory WHERE FilePath = @path AND Status = 'Success'";
+                
+                using (SqlCommand cmd = new SqlCommand(sql, conn)) // Chuẩn bị gói lệnh SQL gởi đi.
+                {
+                    // Gán giá trị filePath vào tham số @path một cách an toàn.
+                    cmd.Parameters.AddWithValue("@path", filePath); 
                         
                         // Thực thi lệnh và lấy về một con số duy nhất (ExecuteScalar).
                         int count = (int)await cmd.ExecuteScalarAsync(); 
@@ -157,14 +159,17 @@ namespace ImportData.Services
                             await bulkCopy.WriteToServerAsync(dt); 
                         }
 
-                        // Sau khi nạp xong dữ liệu máy đo, ta ghi thêm 1 dòng vào bảng "ImportHistory".
-                        // Để đánh dấu: "Tui đã nạp xong file này rồi nhé!".
-                        string sql = "INSERT INTO ImportHistory (FileName, FilePath, ImportTime) VALUES (@name, @path, GETDATE())";
+                        // Sau khi nạp xong dữ liệu máy đo, ta ghi thêm 1 dòng vào bảng "ExcelImportHistory".
+                        // Để đánh dấu: "Tui đã nạp thành công file này nhé!".
+                        long fileSize = new FileInfo(filePath).Length;
+                        string sql = "INSERT INTO ExcelImportHistory (FilePath, FileSize, ImportedAt, RowsInserted, Status) " +
+                                     "VALUES (@path, @size, GETDATE(), @rows, 'Success')";
                         
                         using (SqlCommand cmd = new SqlCommand(sql, conn, trans)) 
                         {
-                            cmd.Parameters.AddWithValue("@name", fileName);   
                             cmd.Parameters.AddWithValue("@path", filePath);   
+                            cmd.Parameters.AddWithValue("@size", fileSize);   
+                            cmd.Parameters.AddWithValue("@rows", dt.Rows.Count);   
                             await cmd.ExecuteNonQueryAsync(); // Thực thi lệnh chèn lịch sử.
                         }
 

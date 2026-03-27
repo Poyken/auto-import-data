@@ -44,16 +44,19 @@ BEGIN
 END
 GO
 
--- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ImportHistory]
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ImportHistory]') AND type in (N'U'))
+-- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ExcelImportHistory]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelImportHistory]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE [dbo].[ImportHistory](
+    CREATE TABLE [dbo].[ExcelImportHistory](
         [Id] [int] IDENTITY(1,1) PRIMARY KEY,
-        [FileName] [nvarchar](500) UNIQUE,
-        [FilePath] [nvarchar](max) NULL,
-        [ImportTime] [datetime] DEFAULT GETDATE()
+        [FilePath] [nvarchar](500) UNIQUE,
+        [FileSize] [bigint] NULL,
+        [ImportedAt] [datetime2](7) DEFAULT GETDATE(),
+        [RowsInserted] [int] NULL,
+        [Status] [nvarchar](30) NULL,
+        [ErrorMessage] [nvarchar](MAX) NULL
     );
-    PRINT 'Đã tạo bảng ImportHistory thành công.';
+    PRINT 'Đã tạo bảng ExcelImportHistory thành công.';
 END
 GO
 
