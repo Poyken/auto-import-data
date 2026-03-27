@@ -1,17 +1,17 @@
 /* 
-   HƯỚNG DẪN: SCRIPT TẠO BẢNG DỮ LIỆU CHO HỆ THỐNG AUTO IMPORT (BẢN FINAL)
+   HƯỚNG DẪN: SCRIPT TẠO BẢNG DỮ LIỆU CHO HỆ THỐNG AUTO IMPORT (BẢN TEST)
    ----------------------------------------------------------
-   Mục tiêu: Tạo 2 bảng mới với tên độc nhất để tránh trùng lặp dữ liệu cũ.
+   Mục tiêu: Tạo 2 bảng với hậu tố _test để thử nghiệm.
 */
 
 -- Chọn Database mục tiêu
 USE SmartFactoryV2; 
 GO
 
--- 1. TẠO BẢNG DỮ LIỆU MÁY ĐO [ExcelData_Import] 
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelData_Import]') AND type in (N'U'))
+-- 1. TẠO BẢNG DỮ LIỆU MÁY ĐO [SortingDataImportExcel_test] 
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SortingDataImportExcel_test]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE [dbo].[ExcelData_Import](
+    CREATE TABLE [dbo].[SortingDataImportExcel_test](
         [Id] [int] IDENTITY(1,1) PRIMARY KEY,
         [EquipmentNumber] [nvarchar](100) NULL,
         [SorterNum] [nvarchar](100) NULL,
@@ -39,14 +39,14 @@ BEGIN
         [FilePath] [nvarchar](500) NULL,
         [ImportDate] [datetime] DEFAULT GETDATE()
     );
-    PRINT 'Đã tạo bảng ExcelData_Import thành công.';
+    PRINT 'Đã tạo bảng SortingDataImportExcel_test thành công.';
 END
 GO
 
--- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ExcelHistory_Import]
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelHistory_Import]') AND type in (N'U'))
+-- 2. TẠO BẢNG THEO DÕI LỊCH SỬ [ExcelImportHistory_test]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExcelImportHistory_test]') AND type in (N'U'))
 BEGIN
-    CREATE TABLE [dbo].[ExcelHistory_Import](
+    CREATE TABLE [dbo].[ExcelImportHistory_test](
         [Id] [int] IDENTITY(1,1) PRIMARY KEY,
         [FilePath] [nvarchar](500) UNIQUE,
         [FileSize] [bigint] NULL,
@@ -55,11 +55,11 @@ BEGIN
         [Status] [nvarchar](30) NULL,
         [ErrorMessage] [nvarchar](MAX) NULL
     );
-    PRINT 'Đã tạo bảng ExcelHistory_Import thành công.';
+    PRINT 'Đã tạo bảng ExcelImportHistory_test thành công.';
 END
 GO
 
 PRINT '------------------------------------------------------------';
-PRINT '>>> [HOÀN TẤT] Database đã sẵn sàng chạy cùng ứng dụng mới! <<<';
+PRINT '>>> [HOÀN TẤT] Database đã sẵn sàng thực hiện Testing! <<<';
 PRINT '------------------------------------------------------------';
 
