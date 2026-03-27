@@ -337,35 +337,23 @@ namespace ImportData
         // Hàm nhận tính hiệu báo động từ O.S và nhảy vào lấy file về.
         private async void OnFileChanged(object sender, FileSystemEventArgs e)
         {
-            // Nếu hệ thống đang đứt SQL lỗi thì báo động cũng phớt lờ, vì cố mở ra cũng vô tác dụng, không đổ data đi được.
             if (!_isSystemHealthy) return; 
 
-            // Cắt đuôi loại file: Nhận chỉ định xlsx, hay xls... Tránh rác pdf, ảnh img bị quăng lầm vào kho.
             string ext = Path.GetExtension(e.FullPath).ToLower();
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
-            // Cắt ra chỉ theo dõi thư mục yyyy-MM-dd là ĐÚNG ngày hôm Nay.
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
             if (!e.FullPath.Contains(todayFolder)) return; 
 
-            // Biến bảo vệ Cờ _isProcessing chống hiện tượng Race Condition (Tranh đồ ăn).
-            // Do máy đo sẽ nổ phát nhiều event Changed liên tục 1 mili giây. Phải khóa lại để Hàm xử lý an tâm nuốt trọn xong 1 cục tệp.
             if (_isProcessing) return; 
             
             try 
             {
-                _isProcessing = true; // Khóa cửa chặn luồng. Không cho bất kỳ ai báo động khác làm phiền nhánh quét này.
-                
-                // Kỹ thuật "Chờ File rảnh" - Máy đo đang ghi data vào file O.S, hệ thống bị nghẽn Lock. 
-                // Ta đứng chờ gõ cửa. Mở được cửa file thì chèn quét gom bộ Đồng vớt (Sync).
-                if (await WaitForFileReadyAsync(e.FullPath)) 
-                {
-                    await PerformSyncAsync(); 
-                }
+                _isProcessing = true; 
+                await ProcessSingleFileAsync(e.FullPath);
             }
             finally 
             {
-                // finally chắc chắn cờ sẽ được mở khóa xả ra DÙ cho bên trong Try có văng Error Exception nổ đi chăng nữa. Tránh kẹt App vĩnh cửu.
                 _isProcessing = false; 
             }
         }
@@ -397,11 +385,9 @@ namespace ImportData
         {
             if (!_isSystemHealthy) return; 
 
-            // Cấu trúc chuỗi dẫn nối sâu vô trong thư mục Hữu hiệu Của Hiện Tại.
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
             string sourceFolder = Path.Combine(_config.BaseFolder, todayFolder);
             
-            // Xóa sổ, ngày hôm nay chưa mở máy Lập trình Đo đạc thì thư mục chắc chắn chưa tồn. Ngưng quét Tốn Nhịp.
             if (!Directory.Exists(sourceFolder)) 
             {
                 UpdateStatus("Đang chờ thư mục: " + todayFolder, Color.White);
@@ -412,65 +398,55 @@ namespace ImportData
 
             try
             {
-                // Quét rải rác thu lấy toàn bộ File Mọi Kiểu (*.*) ở tận hang hốc thư mục (AllDirectories).
                 string[] files = Directory.GetFiles(sourceFolder, "*.*", SearchOption.AllDirectories)
                     .Where(s => s.EndsWith(".xlsx") || s.EndsWith(".xls") || s.EndsWith(".xlsm"))
                     .ToArray();
 
-                foreach (string filePath in files) // Giải trình quét 1 mẻ các loại file List hộp mới vừa gắp.
+                foreach (string filePath in files) 
                 {
-                    string fileName = Path.GetFileName(filePath); // Cắt giật đuôi dẫn thư đằng trước, lấy đúng tên cục trơn "Result_1.xlsx" cho đẹp Data DB.
-                    
-                    // Nhắc Thợ Database Hỏi Trong Sổ Lịch SQL có cái Tên file nào Trùng chưa?
-                    // Trùng (True) thì chạy câu lệnh (continue) -> Lờ Bỏ nó đi lấy Tệp Tên Kế Tiếp vòng lại. Tiết kiệm không phải Load Lại tệp Xã Hội rác Trùng Cũ!
-                    if (await _dbService.IsFileImportedAsync(filePath)) continue; 
-
-                    Log($">>> Đang nhập dữ liệu: {fileName}");
-                    
-                    // Triệu hồi ExcelService: Nuốt chửng nguyên file vật lý châm thành 1 bộ Data Lưới Table Phẳng lì đẹp mắt!.
-                    var dt = _excelService.ReadExcelFile(filePath);
-                    // Trường hợp file khuyết Null, Mất Nàng hay rỗng không hàng cột nào. Dừng Cuộc Chơi Cho Nó Bãi!
-                    if (dt == null || dt.Rows.Count == 0)
-                    {
-                        Log($"[LỖI] Tệp {fileName} rỗng hoặc không đọc được.");
-                        continue;
-                    }
-
-                    bool success = await _dbService.ExecuteImportBatchAsync(dt, fileName, filePath) > 0;
-                    
-                    if (!success) Log($"[LỖI] Nhập tệp {fileName} thất bại.");
+                    await ProcessSingleFileAsync(filePath);
                 }
                 
                 UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 UpdateStatus("Lỗi đồng bộ", Color.Red); 
-                Log("[LỖI] Đồng bộ dữ liệu thất bại."); 
+                Log($"[LỖI] Đồng bộ dữ liệu thất bại: {ex.Message}"); 
             }
         }
 
         // Tác Vụ Đặc Biệt Nhất: Bắt Trọn Giải Cứu Kết Nối Excel Ram Đẩy Cho Chở SQL Thả.
-        private async Task<bool> ProcessSingleFileAsync(string filePath, string fileName)
+        private async Task ProcessSingleFileAsync(string filePath)
         {
+            string fileName = Path.GetFileName(filePath);
+
             try
             {
+                // Nhắc Thợ Database Hỏi Trong Sổ Lịch SQL có cái Tên file nào Trùng chưa?
+                if (await _dbService.IsFileImportedAsync(filePath)) return; 
+
+                // Kỹ thuật "Khóa đợi Máy đo nặn xong file"
+                if (!await WaitForFileReadyAsync(filePath))
+                {
+                    Log($"[BỎ QUA] Tệp đang bị khóa hoặc chưa sẵn sàng: {fileName}");
+                    return;
+                }
+
+                Log($">>> Đang nhập dữ liệu: {fileName}");
+
                 // Triệu hồi ExcelService: Nuốt chửng nguyên file vật lý châm thành 1 bộ Data Lưới Table Phẳng lì đẹp mắt!.
                 var dataTable = _excelService.ReadExcelFile(filePath);
                 
-                // Trường hợp file khuyết Null, Mất Nàng hay rỗng không hàng cột nào. Dừng Cuộc Chơi Cho Nó Bãi!
-                if (dataTable == null || dataTable.Rows.Count == 0) return false; 
+                // Trường hợp file rỗng hoặc lỗi định dạng.
+                if (dataTable == null || dataTable.Rows.Count == 0) return; 
   
-                // Triệu hồi Thợ SQL (DatabaseService): Gấp bộ DataTable vuông vức này chuyển nhồi Tống vào miệng rãnh BulkCopy nạp tốc độ hàng giây!
-                int rowsImported = await _dbService.ExecuteImportBatchAsync(dataTable, fileName, filePath);
-                
-                // Hồi phản số dòng (Ví dụ trả 10). Tức là > 0 thì Trình Báo Vui Lên Sếp Cờ Hàm Rằng Bọt Đã Đổ True Lên Ngon Lành Cành Quất Rụng Ngay!.
-                return rowsImported > 0; 
+                // Triệu hồi Thợ SQL (DatabaseService): Đẩy hàng loạt dữ liệu vào SQL.
+                await _dbService.ExecuteImportBatchAsync(dataTable, fileName, filePath);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Log($"[LỖI] Xử lý file {fileName} thất bại."); 
-                return false;
+                Log($"[LỖI] Xử lý file {fileName} thất bại: {ex.Message}"); 
             }
         }
         /// <summary>
