@@ -5,46 +5,55 @@ using System.Text.Json;
 namespace ImportData.Core
 {
     /// <summary>
-    /// Manages application configuration and persistence.
-    /// Handles database connection strings, folder paths, and synchronization settings.
+    /// Lớp AppConfig: Quản lý các cấu hình và lưu trữ thông tin hệ thống.
+    /// Giúp ứng dụng biết "Máy chủ SQL nào?" và "Thư mục nào cần quét?".
     /// </summary>
     public class AppConfig
     {
+        // CHUỖI KẾT NỐI FIX CỨNG (Sản xuất): Đảm bảo App luôn chạy được dù thiếu file json.
         private const string HardcodedConn = @"Server=dbserver.hycap.co.kr,5398;Database=SmartFactoryV2;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
+        // Ép buộc dùng chuỗi fix cứng ở trên (true) hoặc dùng từ file appsettings.json (false).
         private const bool UseHardcodedConn = true; 
+        // Tên thư mục mặc định trên Desktop để canh chừng file mới.
         private const string DefaultFolderName = "task";
 
-        public string ConnectionString { get; set; }
-        public string BaseFolder { get; set; }
-        public int ScanIntervalSeconds { get; set; } = 600;
-        public int HealthCheckTimeoutSeconds { get; set; } = 5;
+        // CÁC THUỘC TÍNH CẤU HÌNH:
+        public string ConnectionString { get; set; }     // Chuỗi kết nối SQL Server.
+        public string BaseFolder { get; set; }           // Đường dẫn thư mục máy đo.
+        public int ScanIntervalSeconds { get; set; } = 600; // Tần suất quét định kỳ (giây).
+        public int HealthCheckTimeoutSeconds { get; set; } = 5; // Thời gian chờ SQL tối đa.
 
-        private string _configFilePath;
+        private string _configFilePath; // Lưu đường dẫn file appsettings.json đã nạp.
 
+        // HÀM KHỞI TẠO (Constructor): Chạy đầu tiên khi tạo mới đối tượng AppConfig.
         public AppConfig() 
         {
+            // Thiết lập giá trị mặc định ban đầu.
             ConnectionString = HardcodedConn;
             BaseFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), DefaultFolderName); 
         }
 
         /// <summary>
-        /// Loads configuration from appsettings.json, with fallbacks to defaults.
+        /// Nạp cấu hình từ file appsettings.json lên bộ nhớ RAM.
         /// </summary>
         public void Load(Action<string> logger = null)
         {
             try
             {
+                // Tìm kiếm file appsettings.json ở thư mục chạy hoặc thư mục source code.
                 string runDir = AppDomain.CurrentDomain.BaseDirectory; 
                 string sourceDir = Path.GetFullPath(Path.Combine(runDir, @"..\..\..\")); 
                 
                 string settingsPath = Path.Combine(runDir, "appsettings.json"); 
                 string sourceSettingsPath = Path.Combine(sourceDir, "appsettings.json"); 
 
+                // Chọn file nào tồn tại (Ưu tiên thư mục Source khi đang Code).
                 _configFilePath = File.Exists(sourceSettingsPath) ? sourceSettingsPath : settingsPath; 
 
                 if (File.Exists(_configFilePath))
                 {
                     string json;
+                    // Mở file và đọc toàn bộ nội dung (hỗ trợ đọc khi file đang mở).
                     using (var fs = new FileStream(_configFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) 
                     using (var sr = new StreamReader(fs)) 
                     {
@@ -53,42 +62,48 @@ namespace ImportData.Core
 
                     if (!string.IsNullOrWhiteSpace(json))
                     {
+                        // Phân tích chuỗi JSON thành các thuộc tính C#.
                         using (var doc = JsonDocument.Parse(json)) 
                         {
                             var root = doc.RootElement; 
                             
+                            // 1. Nạp Chuỗi Kết Nối (Nếu không ép dùng chuỗi fix cứng).
                             if (!UseHardcodedConn && root.TryGetProperty("ConnectionStrings", out var connSection))
                             {
                                 ConnectionString = connSection.GetProperty("DefaultConnection").GetString() ?? ConnectionString;
                             }
 
+                            // 2. Nạp Đường Dẫn Thư Mục.
                             if (root.TryGetProperty("FolderSettings", out var folderSection))
                             {
                                 BaseFolder = folderSection.GetProperty("BaseFolder").GetString() ?? BaseFolder;
                             }
 
+                            // 3. Nạp Tần Suất Quét.
                             if (root.TryGetProperty("SyncSettings", out var syncSection))
                             {
                                 ScanIntervalSeconds = syncSection.GetProperty("ScanIntervalSeconds").GetInt32();
                             }
 
+                            // 4. Nạp Thời Gian Chờ Kết Nối.
                             if (root.TryGetProperty("HealthCheckSettings", out var healthSection))
                             {
                                 HealthCheckTimeoutSeconds = healthSection.GetProperty("ConnectionTimeoutSeconds").GetInt32();
                             }
                         }
                     }
-                    logger?.Invoke($"[CONFIG] Configuration loaded from: {Path.GetFileName(_configFilePath)}");
+                    logger?.Invoke($"[CẤU HÌNH] Đã nạp thành công từ: {Path.GetFileName(_configFilePath)}");
                 }
             }
             catch (Exception ex)
             {
-                logger?.Invoke($"[CONFIG-WARN] Failed to load config, using defaults: {ex.Message}");
+                // Nếu lỗi (file hỏng, sai định dạng), in cảnh báo và dùng mặc định.
+                logger?.Invoke($"[CẢNH BÁO] Không nạp được cấu hình, dùng mặc định: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Saves the current configuration properties back to the appsettings.json file.
+        /// Lưu các thông số hiện tại xuống file appsettings.json.
         /// </summary>
         public void Save()
         {
@@ -96,6 +111,7 @@ namespace ImportData.Core
             {
                 if (string.IsNullOrEmpty(_configFilePath)) return;
 
+                // Tạo đối tượng JSON để lưu trữ.
                 var configData = new
                 {
                     ConnectionStrings = new { DefaultConnection = ConnectionString },
@@ -104,12 +120,14 @@ namespace ImportData.Core
                     HealthCheckSettings = new { ConnectionTimeoutSeconds = HealthCheckTimeoutSeconds }
                 };
 
+                // Chuyển đối tượng C# thành định dạng văn bản JSON đẹp mắt.
                 string json = JsonSerializer.Serialize(configData, new JsonSerializerOptions { WriteIndented = true });
+                // Ghi đè vào file trên ổ cứng.
                 File.WriteAllText(_configFilePath, json);
             }
             catch (Exception)
             {
-                // Silently fail if save is not possible (e.g. file locked)
+                // Bỏ qua lỗi nếu không thể lưu (ví dụ file đang bị khóa bởi trình khác).
             }
         }
     }
