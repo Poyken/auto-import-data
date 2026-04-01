@@ -13,8 +13,8 @@ namespace ImportData.Services
     /// </summary>
     public class DatabaseService
     {
-        private const string TableData = "SortingDataImportExcel_test";
-        private const string TableHistory = "ExcelImportHistory_test";
+        private const string TableData = "SortingDataImportExcel";
+        private const string TableHistory = "ExcelImportHistory";
 
         private static readonly string[] SqlColumns = {
             "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo",
@@ -121,7 +121,15 @@ namespace ImportData.Services
                             bulkCopy.DestinationTableName = TableData; 
                             for (int i = 0; i < SqlColumns.Length; i++) 
                             {
-                                bulkCopy.ColumnMappings.Add(i, SqlColumns[i]); 
+                                if (SqlColumns[i] == "Barcode") 
+                                {
+                                    // Use LotNo's index (4) as the source for Barcode
+                                    bulkCopy.ColumnMappings.Add(4, SqlColumns[i]); 
+                                }
+                                else 
+                                {
+                                    bulkCopy.ColumnMappings.Add(i, SqlColumns[i]); 
+                                }
                             }
                             await bulkCopy.WriteToServerAsync(dt); 
                         }
