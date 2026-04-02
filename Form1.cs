@@ -91,7 +91,9 @@ namespace ImportData
         private async Task PerformHealthCheckAsync()
         {
             string previousFolder = _config.BaseFolder;
-            _config.Load(); // Đọc lại cấu hình xem có ai đổi file json không.
+            
+            // Không thực hiện Load() ở đây để tránh ghi đè giá trị Folder người dùng vừa chọn bằng tay.
+            // Chỉ Load cấu hình định kỳ khi hệ thống đang ở trạng thái nhàn rỗi.
 
             string currentState = "HEALTHY";
             bool isDirectoryOk = Directory.Exists(_config.BaseFolder); // Thư mục còn sống không?
@@ -103,11 +105,16 @@ namespace ImportData
             _isSystemHealthy = isDirectoryOk && isDatabaseOk;
 
             // Xử lý khi người dùng đổi sang thư mục canh gác mới.
-            if (_isSystemHealthy && previousFolder != _config.BaseFolder)
+            if (previousFolder != _config.BaseFolder)
             {
-                Log($"[THÔNG BÁO] Đã đổi thư mục quét sang: {_config.BaseFolder}"); 
+                Log($"[THÔNG BÁO] Hệ thống nhận diện thư mục quét mới: {_config.BaseFolder}"); 
                 RestartWatcher(); 
                 await SynchronizeAsync(); 
+            }
+            else if (_isSystemHealthy && _lastHealthState != "HEALTHY")
+            {
+                // Trường hợp phục hồi từ lỗi sang ổn định thì cũng cần sync lại.
+                await SynchronizeAsync();
             }
 
             // Xử lý thay đổi tình trạng bệnh tật của hệ thống.
@@ -272,7 +279,7 @@ namespace ImportData
             string ext = Path.GetExtension(e.FullPath).ToLower();
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
-            // Quan tâm tệp nằm trong thư mục ngày hôm nay.
+            // Quan tâm tệp nằm trong thư mục ngày hôm nay (yyyy-MM-dd).
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
             if (!e.FullPath.Contains(todayFolder)) return; 
 
