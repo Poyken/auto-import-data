@@ -20,7 +20,7 @@ namespace ImportData.Services
 
         // Danh sách ánh xạ các cột từ Excel sang SQL để App biết "Cái gì bỏ vào đâu?".
         private static readonly string[] SqlColumns = {
-            "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode", "LotNo",
+            "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode",
             "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", "Capacitance_F", 
             "BeginVoltageSD_mV", "ChargeEndCurrent_mA", "EndVoltage_mV", "EndCurrent_mA", "DischargeVoltage1_mV", 
             "DischargeVoltage1_Time", "DischargeVoltage2_mV", "DischargeVoltage2_Time", "DischargeBeginVoltage_mV", "DischargeBeginCurrent_mA", 
@@ -135,19 +135,48 @@ namespace ImportData.Services
                             bulkCopy.BatchSize = 1000;
                             bulkCopy.BulkCopyTimeout = 60;
 
-                            // Thực hiện ánh xạ (Mapping) bằng Tên Cột để tránh lỗi khi Excel thay đổi thứ tự cột.
-                            foreach (string colName in SqlColumns)
+                            // Bảng ánh xạ Thông minh: Excel Name -> SQL Name
+                            var headerMap = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                            foreach (DataColumn dc in dt.Columns)
                             {
-                                if (colName == "Barcode")
+                                string originalName = dc.ColumnName.Trim();
+                                string cleanName = originalName.Replace(" ", "").Replace("_", "").Replace("-", "").ToLower();
+                                
+                                // Quy tắc ưu tiên 1: Tên chính xác (Ví dụ: SorterNum)
+                                foreach (string sqlCol in SqlColumns)
                                 {
-                                    // Theo yêu cầu: Lấy dữ liệu từ cột 'LotNo' trong Excel nạp vào cột 'Barcode' trong SQL.
-                                    bulkCopy.ColumnMappings.Add("LotNo", "Barcode");
+                                    if (string.Equals(sqlCol, originalName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        headerMap[originalName] = sqlCol;
+                                        break;
+                                    }
                                 }
-                                else
+                                if (headerMap.ContainsKey(originalName)) continue;
+
+                                // Quy tắc ưu tiên 2: Xử lý cột LotNo -> Barcode
+                                if (cleanName.Contains("lotno"))
                                 {
-                                    // Ánh xạ các cột còn lại (Tên cột Excel trùng với tên cột SQL).
-                                    bulkCopy.ColumnMappings.Add(colName, colName);
+                                    headerMap[originalName] = "Barcode";
+                                    continue;
                                 }
+
+                                // Quy tắc ưu tiên 3: Làm sạch tên (Bỏ phân cách)
+                                foreach (string sqlCol in SqlColumns)
+                                {
+                                    string cleanSql = sqlCol.Replace("_", "").ToLower();
+                                    if (cleanName == cleanSql || cleanName.Contains(cleanSql) || cleanSql.Contains(cleanName))
+                                    {
+                                        headerMap[originalName] = sqlCol;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Thực thi Mapping vào BulkCopy
+                            foreach (var entry in headerMap)
+                            {
+                                bulkCopy.ColumnMappings.Add(entry.Key, entry.Value);
+                                // _logger?.Invoke($"[MAPPING] {entry.Key} -> {entry.Value}"); // Chỉ dùng khi Debug
                             }
                             
                             await bulkCopy.WriteToServerAsync(dt); // Thực hiện đổ mẻ dữ liệu.

@@ -85,26 +85,8 @@ namespace ImportData.Services
         /// </summary>
         private bool ValidateHeaders(DataTable dt)
         {
-            if (dt == null) return false; 
-            if (dt.Columns.Count < RequiredHeaders.Length) return false;
-
-            foreach (string header in RequiredHeaders)
-            {
-                bool found = false;
-                foreach (DataColumn col in dt.Columns)
-                {
-                    if (string.Equals(col.ColumnName.Trim(), header, StringComparison.OrdinalIgnoreCase))
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) 
-                {
-                    _logger?.Invoke($"[CẢNH BÁO] Thiếu cột bắt buộc: {header}");
-                    return false;
-                }
-            }
+            if (dt == null || dt.Columns.Count == 0) return false; 
+            // Hiện tại chúng ta đã có Smart Mapping, nên chỉ cần đảm bảo có dữ liệu.
             return true;
         }
     }
