@@ -3,22 +3,16 @@ using System;
 using System.IO;
 using System.Data;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using ImportData.Core;
 
 namespace ImportData.Services 
 {
-    /// <summary>
-    /// Lớp DatabaseService: Phụ trách toàn bộ các thao tác với Cơ sở dữ liệu SQL Server.
-    /// Bao gồm: Kiểm tra kết nối, Kiểm tra trùng lặp và Nhập dữ liệu hàng loạt tốc độ cao.
-    /// </summary>
     public class DatabaseService
     {
-        // Tên bảng chứa dữ liệu đo đạc.
         private const string TableData = "SortingDataImportExcel";
-        // Tên bảng ghi lại lịch sử các file đã nạp (để tránh nạp trùng).
         private const string TableHistory = "ExcelImportHistory";
 
-        // Danh sách ánh xạ các cột từ Excel sang SQL để App biết "Cái gì bỏ vào đâu?".
         private static readonly string[] SqlColumns = {
             "EquipmentNumber", "SorterNum", "StartTime", "WorkflowCode",
             "Barcode", "Slot", "Position", "Channel", "Capacity_mAh", "Capacitance_F", 
@@ -27,11 +21,10 @@ namespace ImportData.Services
             "NGInfo", "EndTime", "FilePath", "ImportDate"
         };
 
-        private readonly AppConfig _config;   // Cấu hình (ConnectionString).
-        private readonly Action<string> _logger; // Hàm để in nhật ký ra màn hình.
-        private string _lastConnectionString; // Ghi nhớ chuỗi kết nối cũ để xử lý thay đổi server.
+        private readonly AppConfig _config;
+        private readonly Action<string> _logger;
+        private string _lastConnectionString;
 
-        // Hàm khởi tạo DatabaseService.
         public DatabaseService(AppConfig config, Action<string> logger)
         {
             _config = config; 
@@ -39,150 +32,170 @@ namespace ImportData.Services
             _lastConnectionString = config.ConnectionString; 
         }
 
-        /// <summary>
-        /// Kiểm tra xem Server SQL có đang bật và cho phép kết nối không.
-        /// </summary>
         public async Task<bool> TestConnectionAsync()
         {
             try 
             {
-                // Nếu người dùng vừa đổi server trong file cấu hình, ta xóa cache kết nối cũ.
                 if (_config.ConnectionString != _lastConnectionString)
                 {
                     SqlConnection.ClearAllPools();
                     _lastConnectionString = _config.ConnectionString;
                 }
-                
-                // Thiết lập thời gian chờ tối đa (Timeout) khi thử kết nối.
-                var builder = new SqlConnectionStringBuilder(_config.ConnectionString) 
-                { 
-                    ConnectTimeout = _config.HealthCheckTimeoutSeconds 
-                };
-                
-                // Mở thử 1 kết nối tạm thời đến SQL Server.
+                var builder = new SqlConnectionStringBuilder(_config.ConnectionString) { ConnectTimeout = _config.HealthCheckTimeoutSeconds };
                 using (var testConn = new SqlConnection(builder.ConnectionString)) 
                 {
-                    await testConn.OpenAsync(); // Mở kết nối bất đồng bộ.
-                    return true; // Kết nối thành công.
+                    await testConn.OpenAsync();
+                    return true;
                 } 
             }
             catch (Exception ex)
             {
-                // Ghi nhật ký lỗi cụ thể để dễ gỡ lỗi.
                 _logger?.Invoke($"[LỖI-SQL-CONNECT] {ex.Message}");
                 return false;
             }
         }
 
         /// <summary>
-        /// Kiểm tra xem tệp Excel này đã được nạp thành công vào hệ thống trước đó chưa.
+        /// Kiểm tra trùng lặp thông minh: Dựa trên Tên tệp và Dung lượng.
+        /// Trả về: 
+        /// 0 = Chưa nạp bao giờ.
+        /// 1 = Đã nạp rồi và Path giống hệt (Không làm gì).
+        /// 2 = Đã nạp rồi nhưng đang ở Path mới (Cần cập nhật Path trong lịch sử).
         /// </summary>
-        public async Task<bool> IsFileImportedAsync(string filePath) 
+        public async Task<int> CheckImportStatusAsync(string filePath)
         {
             try
             {
+                string fileName = Path.GetFileName(filePath);
+                long fileSize = new FileInfo(filePath).Length;
+
                 using (var conn = new SqlConnection(_config.ConnectionString)) 
                 {
-                    await conn.OpenAsync(); 
-                    // Câu lệnh SQL: Đếm số dòng có đường dẫn tệp trùng khớp và trạng thái thành công.
-                    string sql = $"SELECT COUNT(*) FROM {TableHistory} WHERE FilePath = @path AND Status = 'Success'";
-                    
-                    using (var cmd = new SqlCommand(sql, conn)) 
+                    await conn.OpenAsync();
+                    string sql = $"SELECT FilePath FROM {TableHistory} WHERE (FilePath LIKE '%' + @name) AND FileSize = @size AND Status = 'Success'";
+                    using (var cmd = new SqlCommand(sql, conn))
                     {
-                        cmd.Parameters.AddWithValue("@path", filePath); // Truyền tham số an toàn chống SQL Injection.
-                        int count = (int)await cmd.ExecuteScalarAsync(); 
-                        return count > 0; // Nếu lớn hơn 0 tức là tệp đã nạp rồi.
+                        cmd.Parameters.AddWithValue("@name", fileName);
+                        cmd.Parameters.AddWithValue("@size", fileSize);
+                        
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                string existingPath = reader["FilePath"].ToString();
+                                // Nếu Path giống hệt -> Đã nạp hoàn toàn.
+                                if (string.Equals(existingPath, filePath, StringComparison.OrdinalIgnoreCase)) return 1;
+                                // Nếu Path khác -> Đã nạp nhưng dời chỗ -> Cần cập nhật Path.
+                                return 2;
+                            }
+                        }
                     }
-                } 
+                }
+                return 0; // Chưa nạp.
+            }
+            catch { return 0; }
+        }
+
+        public async Task UpdateHistoryPathAsync(string filePath)
+        {
+            try
+            {
+                string fileName = Path.GetFileName(filePath);
+                long fileSize = new FileInfo(filePath).Length;
+                using (var conn = new SqlConnection(_config.ConnectionString))
+                {
+                    await conn.OpenAsync();
+                    string sql = $"UPDATE {TableHistory} SET FilePath = @newPath, ImportedAt = GETDATE() WHERE (FilePath LIKE '%' + @name) AND FileSize = @size";
+                    using (var cmd = new SqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@newPath", filePath);
+                        cmd.Parameters.AddWithValue("@name", fileName);
+                        cmd.Parameters.AddWithValue("@size", fileSize);
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                }
+                _logger?.Invoke($"[HISTORY-UPDATE] Đã cập nhật vị trí mới cho tệp: {fileName}");
             }
             catch (Exception ex)
             {
-                _logger?.Invoke($"[LỖI-SQL] Không kiểm tra được lịch sử nạp file: {ex.Message}");
-                return false; 
+                _logger?.Invoke($"[LỖI-UPDATE-PATH] {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Nhập hàng ngàn dòng dữ liệu từ DataTable vào SQL Server bằng công nghệ SqlBulkCopy (Cực nhanh).
-        /// </summary>
         public async Task<int> ExecuteImportBatchAsync(DataTable dt, string fileName, string filePath) 
         {
-            if (dt == null || dt.Rows.Count == 0) return 0; // Nếu dữ liệu rỗng thì thoát.
+            if (dt == null || dt.Rows.Count == 0) return 0;
 
             using (var conn = new SqlConnection(_config.ConnectionString)) 
             {
                 await conn.OpenAsync(); 
-                // Sử dụng Transaction (Giao dịch): Đảm bảo hoặc nạp hết, hoặc không nạp gì nếu có lỗi (để bảo toàn dữ liệu).
                 using (var trans = conn.BeginTransaction())
                 {
                     try
                     {
-                        // Thêm 2 cột metadata "FilePath" và "ImportDate" vào bảng dữ liệu máy đo để dễ truy vết.
                         if (!dt.Columns.Contains("FilePath")) dt.Columns.Add("FilePath", typeof(string));
                         if (!dt.Columns.Contains("ImportDate")) dt.Columns.Add("ImportDate", typeof(DateTime));
                         
-                        // Gán giá trị cụ thể cho từng dòng dữ liệu.
                         foreach (DataRow row in dt.Rows) 
                         {
                             row["FilePath"] = filePath; 
                             row["ImportDate"] = DateTime.Now; 
                         }
 
-                        // Sử dụng SqlBulkCopy: Đổ hàng ngàn dòng dữ liệu trực tiếp vào SQL trong vài giây.
                         using (var bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
-                            bulkCopy.DestinationTableName = TableData; // Tên bảng đích.
+                            bulkCopy.DestinationTableName = TableData;
                             bulkCopy.BatchSize = 1000;
-                            bulkCopy.BulkCopyTimeout = 60;
+                            bulkCopy.BulkCopyTimeout = 120;
 
-                            // Bảng ánh xạ Thông minh: Excel Name -> SQL Name
-                            var headerMap = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                            // Bảng ánh xạ Thủ công chính xác (Ưu tiên số 1)
+                            var manualMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                                { "Equipment Number", "EquipmentNumber" },
+                                { "EquipmentNumber", "EquipmentNumber" },
+                                { "LotNo", "Barcode" },
+                                { "Lot No", "Barcode" },
+                                { "Capacity(mAh)", "Capacity_mAh" },
+                                { "Capacitance(F)", "Capacitance_F" },
+                                { "BeginVoltageSD(mV)", "BeginVoltageSD_mV" },
+                                { "Charge EndCurrent(mA)", "ChargeEndCurrent_mA" },
+                                { "EndVoltage(mV)", "EndVoltage_mV" },
+                                { "EndCurrent(mA)", "EndCurrent_mA" },
+                                { "DischargeVoltage1(mV)", "DischargeVoltage1_mV" },
+                                { "DischargeVoltage1_Time", "DischargeVoltage1_Time" },
+                                { "DischargeVoltage2(mV)", "DischargeVoltage2_mV" },
+                                { "DischargeVoltage2_Time", "DischargeVoltage2_Time" },
+                                { "DischargeBeginVoltage(mV)", "DischargeBeginVoltage_mV" },
+                                { "DischargeBeginCurrent(mA)", "DischargeBeginCurrent_mA" }
+                            };
+
                             foreach (DataColumn dc in dt.Columns)
                             {
-                                string originalName = dc.ColumnName.Trim();
-                                string cleanName = originalName.Replace(" ", "").Replace("_", "").Replace("-", "").ToLower();
-                                
-                                // Quy tắc ưu tiên 1: Tên chính xác (Ví dụ: SorterNum)
-                                foreach (string sqlCol in SqlColumns)
+                                string colName = dc.ColumnName.Trim();
+                                // Xử lý trường hợp xuống dòng trong Header Excel
+                                string cleanName = colName.Replace("\r", " ").Replace("\n", " ").Replace("  ", " ").Trim();
+
+                                if (manualMap.ContainsKey(cleanName))
                                 {
-                                    if (string.Equals(sqlCol, originalName, StringComparison.OrdinalIgnoreCase))
+                                    bulkCopy.ColumnMappings.Add(dc.ColumnName, manualMap[cleanName]);
+                                }
+                                else
+                                {
+                                    // Fuzzy Match cho các cột còn lại
+                                    string fuzzySearch = cleanName.Replace(" ", "").Replace("_", "").ToLower();
+                                    foreach (string sqlCol in SqlColumns)
                                     {
-                                        headerMap[originalName] = sqlCol;
-                                        break;
+                                        if (sqlCol.Replace("_", "").ToLower().Contains(fuzzySearch) || fuzzySearch.Contains(sqlCol.Replace("_", "").ToLower()))
+                                        {
+                                            bulkCopy.ColumnMappings.Add(dc.ColumnName, sqlCol);
+                                            break;
+                                        }
                                     }
                                 }
-                                if (headerMap.ContainsKey(originalName)) continue;
-
-                                // Quy tắc ưu tiên 2: Xử lý cột LotNo -> Barcode
-                                if (cleanName.Contains("lotno"))
-                                {
-                                    headerMap[originalName] = "Barcode";
-                                    continue;
-                                }
-
-                                // Quy tắc ưu tiên 3: Làm sạch tên (Bỏ phân cách)
-                                foreach (string sqlCol in SqlColumns)
-                                {
-                                    string cleanSql = sqlCol.Replace("_", "").ToLower();
-                                    if (cleanName == cleanSql || cleanName.Contains(cleanSql) || cleanSql.Contains(cleanName))
-                                    {
-                                        headerMap[originalName] = sqlCol;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Thực thi Mapping vào BulkCopy
-                            foreach (var entry in headerMap)
-                            {
-                                bulkCopy.ColumnMappings.Add(entry.Key, entry.Value);
-                                // _logger?.Invoke($"[MAPPING] {entry.Key} -> {entry.Value}"); // Chỉ dùng khi Debug
                             }
                             
-                            await bulkCopy.WriteToServerAsync(dt); // Thực hiện đổ mẻ dữ liệu.
+                            await bulkCopy.WriteToServerAsync(dt);
                         }
 
-                        // Sau khi nạp dữ liệu máy đo xong, ta ghi lại "Biên bản" nạp file vào bảng lịch sử.
                         long fileSize = new FileInfo(filePath).Length;
                         string historySql = $"INSERT INTO {TableHistory} (FilePath, FileSize, ImportedAt, RowsInserted, Status) " +
                                             "VALUES (@path, @size, GETDATE(), @rows, 'Success')";
@@ -195,15 +208,15 @@ namespace ImportData.Services
                             await cmd.ExecuteNonQueryAsync(); 
                         }
 
-                        trans.Commit(); // Hoàn tất giao dịch (Lưu vĩnh viễn vào DB).
+                        trans.Commit();
                         _logger?.Invoke($"[DB-OK] Đã nạp thành công {dt.Rows.Count} dòng từ tệp {fileName}");
                         return dt.Rows.Count; 
                     }
                     catch (Exception ex)
                     {
-                        trans.Rollback(); // Nếu có bất kỳ lỗi gì phát sinh, hủy bỏ toàn bộ mẻ nạp này để tránh rác DB.
+                        trans.Rollback();
                         _logger?.Invoke($"[DB-FAIL] Nạp dữ liệu thất bại cho tệp {fileName}: {ex.Message}"); 
-                        throw; // Bắn lỗi lên lớp trên để Form1 xử lý in ra màn hình.
+                        throw;
                     }
                 }
             }

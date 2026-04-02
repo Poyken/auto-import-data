@@ -279,6 +279,15 @@ namespace ImportData
             string ext = Path.GetExtension(e.FullPath).ToLower();
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
+            // Kiểm tra trạng thái nạp file thông minh
+            int status = await _dbService.CheckImportStatusAsync(e.FullPath);
+            if (status == 1) return; // Đã nạp rồi.
+            if (status == 2) 
+            {
+                await _dbService.UpdateHistoryPathAsync(e.FullPath);
+                return;
+            }
+
             // Quan tâm tệp nằm trong thư mục ngày hôm nay (yyyy-MM-dd).
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
             if (!e.FullPath.Contains(todayFolder)) return; 
@@ -310,18 +319,28 @@ namespace ImportData
                 return;
             }
 
-            UpdateStatus("Đang đồng bộ dữ liệu...", Color.Yellow); 
+            UpdateStatus("Đang quét tệp...", Color.Yellow); 
 
             try
             {
-                // Lấy toàn bộ danh sách tệp đo đạc trong thư mục ngày hôm nay.
-                string[] files = Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories)
-                    .Where(f => f.EndsWith(".xlsx") || f.EndsWith(".xls") || f.EndsWith(".xlsm"))
-                    .ToArray();
+                // Sử dụng Task.Run để quét tệp ngầm, tránh treo giao diện (UI) khi thư mục có hàng nghìn file.
+                string[] files = await Task.Run(() => 
+                    Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories)
+                        .Where(f => f.EndsWith(".xlsx") || f.EndsWith(".xls") || f.EndsWith(".xlsm"))
+                        .ToArray()
+                );
 
+                if (files.Length == 0)
+                {
+                    UpdateStatus("Hệ thống Sẵn sàng", Color.Green);
+                    return;
+                }
+
+                int count = 0;
                 foreach (string file in files) 
                 {
-                    await ProcessSingleFileAsync(file); // Nạp từng file một.
+                    UpdateStatus($"Đồng bộ {++count}/{files.Length}", Color.Orange);
+                    await ProcessSingleFileAsync(file); 
                 }
                 
                 UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 
@@ -342,8 +361,14 @@ namespace ImportData
 
             try
             {
-                // 1. Hỏi Sổ Lịch SQL: File này nạp chưa? Nếu nạp rồi thì bỏ qua ngay.
-                if (await _dbService.IsFileImportedAsync(filePath)) return; 
+                // 1. Kiểm tra trạng thái nạp file thông minh (V6-Ultimate)
+                int status = await _dbService.CheckImportStatusAsync(filePath);
+                if (status == 1) return; // Đã nạp thành công ở chính path này rồi.
+                if (status == 2) 
+                {
+                    await _dbService.UpdateHistoryPathAsync(filePath);
+                    return;
+                }
 
                 // 2. Đàm phán O.S: Chờ máy đo buông tay khỏi tệp (Ready to Read).
                 if (!await IsFileReadyAsync(filePath))
