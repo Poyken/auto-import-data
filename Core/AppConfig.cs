@@ -11,9 +11,9 @@ namespace ImportData.Core
     public class AppConfig
     {
         // CHUỖI KẾT NỐI FIX CỨNG (Sản xuất): Đảm bảo App luôn chạy được dù thiếu file json.
-        private const string HardcodedConn = @"Server=dbserver.hycap.co.kr,5398;Database=SmartFactoryV2;User ID=vinaadmin;Password=vina1234%6&8;TrustServerCertificate=True;";
+        private const string HardcodedConn = @"Server=dbserver.hycap.co.kr,5398;Database=SmartFactoryV2;User ID=vinaadmin;Password=vina1234%6&8;Encrypt=False;TrustServerCertificate=True;";
         // Ép buộc dùng chuỗi fix cứng ở trên (true) hoặc dùng từ file appsettings.json (false).
-        private const bool UseHardcodedConn = true; 
+        private const bool UseHardcodedConn = false; 
         // Tên thư mục mặc định trên Desktop để canh chừng file mới.
         private const string DefaultFolderName = "task";
 

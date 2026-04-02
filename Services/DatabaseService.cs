@@ -66,9 +66,10 @@ namespace ImportData.Services
                     return true; // Kết nối thành công.
                 } 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Lỗi kết nối sẽ được Form1 báo lại cho người dùng bằng thông báo màu đỏ.
+                // Ghi nhật ký lỗi cụ thể để dễ gỡ lỗi.
+                _logger?.Invoke($"[LỖI-SQL-CONNECT] {ex.Message}");
                 return false;
             }
         }
@@ -131,19 +132,24 @@ namespace ImportData.Services
                         using (var bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, trans))
                         {
                             bulkCopy.DestinationTableName = TableData; // Tên bảng đích.
-                            // Thực hiện ánh xạ (Mapping) từng cột trong RAM sang cột tương ứng trên SQL Server.
-                            for (int i = 0; i < SqlColumns.Length; i++) 
+                            bulkCopy.BatchSize = 1000;
+                            bulkCopy.BulkCopyTimeout = 60;
+
+                            // Thực hiện ánh xạ (Mapping) bằng Tên Cột để tránh lỗi khi Excel thay đổi thứ tự cột.
+                            foreach (string colName in SqlColumns)
                             {
-                                if (SqlColumns[i] == "Barcode") 
+                                if (colName == "Barcode")
                                 {
-                                    // Use LotNo's index (4) as the source for Barcode
-                                    bulkCopy.ColumnMappings.Add(4, SqlColumns[i]); 
+                                    // Theo yêu cầu: Lấy dữ liệu từ cột 'LotNo' trong Excel nạp vào cột 'Barcode' trong SQL.
+                                    bulkCopy.ColumnMappings.Add("LotNo", "Barcode");
                                 }
-                                else 
+                                else
                                 {
-                                    bulkCopy.ColumnMappings.Add(i, SqlColumns[i]); 
+                                    // Ánh xạ các cột còn lại (Tên cột Excel trùng với tên cột SQL).
+                                    bulkCopy.ColumnMappings.Add(colName, colName);
                                 }
                             }
+                            
                             await bulkCopy.WriteToServerAsync(dt); // Thực hiện đổ mẻ dữ liệu.
                         }
 

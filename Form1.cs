@@ -363,7 +363,8 @@ namespace ImportData
         // Hàm giúp app chờ đợi file khi nó đang bị máy đo 'rặn' nốt dữ liệu.
         private async Task<bool> IsFileReadyAsync(string filePath)
         {
-            for (int i = 0; i < 5; i++)
+            // Thử 7 lần với khoảng nghỉ 1.5s (tổng cộng ~10 giây) để chờ máy đo nhả file.
+            for (int i = 0; i < 7; i++)
             {
                 try
                 {
@@ -373,8 +374,8 @@ namespace ImportData
                 }
                 catch (IOException) 
                 {
-                    // Thất bại - chờ thêm 1 giây rồi gõ cửa lại lượt tiếp theo.
-                    await Task.Delay(1000); 
+                    // Chờ thêm 1.5 giây rồi gõ cửa lại lượt tiếp theo.
+                    await Task.Delay(1500); 
                 }
             }
             return false;
