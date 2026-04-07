@@ -56,69 +56,28 @@ namespace ImportData.Services
         }
 
         /// <summary>
-        /// Kiểm tra trùng lặp thông minh: Dựa trên Tên tệp và Dung lượng.
-        /// Trả về: 
-        /// 0 = Chưa nạp bao giờ.
-        /// 1 = Đã nạp rồi và Path giống hệt (Không làm gì).
-        /// 2 = Đã nạp rồi nhưng đang ở Path mới (Cần cập nhật Path trong lịch sử).
+        /// Kiểm tra xem tệp Excel này đã được nạp thành công vào hệ thống trước đó chưa (dựa trên Đường dẫn và Tên File chính xác).
         /// </summary>
-        public async Task<int> CheckImportStatusAsync(string filePath)
+        public async Task<bool> IsFileImportedAsync(string filePath) 
         {
             try
             {
-                string fileName = Path.GetFileName(filePath);
-                long fileSize = new FileInfo(filePath).Length;
-
                 using (var conn = new SqlConnection(_config.ConnectionString)) 
                 {
-                    await conn.OpenAsync();
-                    string sql = $"SELECT FilePath FROM {TableHistory} WHERE (FilePath LIKE '%' + @name) AND FileSize = @size AND Status = 'Success'";
-                    using (var cmd = new SqlCommand(sql, conn))
+                    await conn.OpenAsync(); 
+                    string sql = $"SELECT COUNT(*) FROM {TableHistory} WHERE FilePath = @path AND Status = 'Success'";
+                    using (var cmd = new SqlCommand(sql, conn)) 
                     {
-                        cmd.Parameters.AddWithValue("@name", fileName);
-                        cmd.Parameters.AddWithValue("@size", fileSize);
-                        
-                        using (var reader = await cmd.ExecuteReaderAsync())
-                        {
-                            if (await reader.ReadAsync())
-                            {
-                                string existingPath = reader["FilePath"].ToString();
-                                // Nếu Path giống hệt -> Đã nạp hoàn toàn.
-                                if (string.Equals(existingPath, filePath, StringComparison.OrdinalIgnoreCase)) return 1;
-                                // Nếu Path khác -> Đã nạp nhưng dời chỗ -> Cần cập nhật Path.
-                                return 2;
-                            }
-                        }
+                        cmd.Parameters.AddWithValue("@path", filePath);
+                        int count = (int)await cmd.ExecuteScalarAsync(); 
+                        return count > 0;
                     }
-                }
-                return 0; // Chưa nạp.
-            }
-            catch { return 0; }
-        }
-
-        public async Task UpdateHistoryPathAsync(string filePath)
-        {
-            try
-            {
-                string fileName = Path.GetFileName(filePath);
-                long fileSize = new FileInfo(filePath).Length;
-                using (var conn = new SqlConnection(_config.ConnectionString))
-                {
-                    await conn.OpenAsync();
-                    string sql = $"UPDATE {TableHistory} SET FilePath = @newPath, ImportedAt = GETDATE() WHERE (FilePath LIKE '%' + @name) AND FileSize = @size";
-                    using (var cmd = new SqlCommand(sql, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@newPath", filePath);
-                        cmd.Parameters.AddWithValue("@name", fileName);
-                        cmd.Parameters.AddWithValue("@size", fileSize);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
-                }
-                _logger?.Invoke($"[HISTORY-UPDATE] Đã cập nhật vị trí mới cho tệp: {fileName}");
+                } 
             }
             catch (Exception ex)
             {
-                _logger?.Invoke($"[LỖI-UPDATE-PATH] {ex.Message}");
+                _logger?.Invoke($"[LỖI-SQL] Không kiểm tra được lịch sử nạp file: {ex.Message}");
+                return false; 
             }
         }
 
@@ -180,11 +139,12 @@ namespace ImportData.Services
                                 }
                                 else
                                 {
-                                    // Fuzzy Match cho các cột còn lại
-                                    string fuzzySearch = cleanName.Replace(" ", "").Replace("_", "").ToLower();
+                                    // Fuzzy Match cho các cột còn lại: Xóa dấu ngoặc, gạch nối để tạo keyword thuần túy.
+                                    string fuzzySearch = cleanName.Replace(" ", "").Replace("_", "").Replace("-", "").Replace("(", "").Replace(")", "").ToLower();
                                     foreach (string sqlCol in SqlColumns)
                                     {
-                                        if (sqlCol.Replace("_", "").ToLower().Contains(fuzzySearch) || fuzzySearch.Contains(sqlCol.Replace("_", "").ToLower()))
+                                        string cleanSql = sqlCol.Replace("_", "").ToLower();
+                                        if (cleanSql == fuzzySearch || cleanSql.Contains(fuzzySearch) || fuzzySearch.Contains(cleanSql))
                                         {
                                             bulkCopy.ColumnMappings.Add(dc.ColumnName, sqlCol);
                                             break;

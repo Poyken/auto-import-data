@@ -17,7 +17,10 @@ namespace ImportData
     public partial class Form1 : Form
     {
         // Giới hạn 1000 dòng nhật ký trên màn hình để tiết kiệm RAM.
-        private const int MaxLogLines = 1000; 
+        private int MaxLogLines = 1000;
+
+        // Cơ chế khóa luồng siêu cấp (ngăn chặn các tuyến trình giẫm đạp lên nhau)
+        private static SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1);
         
         private readonly AppConfig _config;           // Thông số cấu hình (Thư mục, SQL).
         private readonly DatabaseService _dbService; // Dịch vụ SQL Server.
@@ -104,18 +107,8 @@ namespace ImportData
 
             _isSystemHealthy = isDirectoryOk && isDatabaseOk;
 
-            // Xử lý khi người dùng đổi sang thư mục canh gác mới.
-            if (previousFolder != _config.BaseFolder)
-            {
-                Log($"[THÔNG BÁO] Hệ thống nhận diện thư mục quét mới: {_config.BaseFolder}"); 
-                RestartWatcher(); 
-                await SynchronizeAsync(); 
-            }
-            else if (_isSystemHealthy && _lastHealthState != "HEALTHY")
-            {
-                // Trường hợp phục hồi từ lỗi sang ổn định thì cũng cần sync lại.
-                await SynchronizeAsync();
-            }
+            // (Đã loại bỏ code thừa kiểm tra folder/sync ở đây vì đã được cover đủ ở block phục hồi bên dưới)
+
 
             // Xử lý thay đổi tình trạng bệnh tật của hệ thống.
             if (currentState != _lastHealthState)
@@ -279,12 +272,10 @@ namespace ImportData
             string ext = Path.GetExtension(e.FullPath).ToLower();
             if (ext != ".xlsx" && ext != ".xls" && ext != ".xlsm") return;
 
-            // Kiểm tra trạng thái nạp file thông minh
-            int status = await _dbService.CheckImportStatusAsync(e.FullPath);
-            if (status == 1) return; // Đã nạp rồi.
-            if (status == 2) 
+            // Kiểm tra xem tệp này đã được nạp hay chưa (dựa vào đúng Path tĩnh của nó)
+            if (await _dbService.IsFileImportedAsync(e.FullPath)) 
             {
-                await _dbService.UpdateHistoryPathAsync(e.FullPath);
+                // Chỉ âm thầm bỏ qua, không in thêm làm rác màn hình.
                 return;
             }
 
@@ -292,17 +283,9 @@ namespace ImportData
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
             if (!e.FullPath.Contains(todayFolder)) return; 
 
-            if (_isProcessing) return; 
-            
-            try 
-            {
-                _isProcessing = true; 
-                await ProcessSingleFileAsync(e.FullPath); // Nhảy vào xử lý nạp ngay!
-            }
-            finally 
-            {
-                _isProcessing = false; 
-            }
+            // Không dùng _isProcessing nữa vì nó không an toàn khi đa luồng.
+            // Bắn vào hàng đợi tiến trình không đồng bộ (không chờ await để nhả ThreadPool ngay).
+            _ = Task.Run(async () => await ProcessSingleFileAsync(e.FullPath));
         }
 
         // Đội quân Thu Vén: Quét sạch các file còn sót trong ngày hôm nay.
@@ -336,12 +319,16 @@ namespace ImportData
                     return;
                 }
 
-                int count = 0;
-                foreach (string file in files) 
+                // Ném TOÀN BỘ vòng lặp 47 (hoặc hàng nghìn) tệp xuống Background Worker để KHÔNG BAO GIỜ treo UI.
+                await Task.Run(async () => 
                 {
-                    UpdateStatus($"Đồng bộ {++count}/{files.Length}", Color.Orange);
-                    await ProcessSingleFileAsync(file); 
-                }
+                    int count = 0;
+                    foreach (string file in files) 
+                    {
+                        UpdateStatus($"Đồng bộ {++count}/{files.Length}", Color.Orange);
+                        await ProcessSingleFileAsync(file); 
+                    }
+                });
                 
                 UpdateStatus("Hệ thống Sẵn sàng", Color.Green); 
             }
@@ -359,14 +346,14 @@ namespace ImportData
         {
             string fileName = Path.GetFileName(filePath);
 
+            // Xin chìa khóa để vào phòng xử lý (Tuyệt đối không cho 2 tệp xử lý cùng 1 mili-giây).
+            await _fileLock.WaitAsync();
             try
             {
-                // 1. Kiểm tra trạng thái nạp file thông minh (V6-Ultimate)
-                int status = await _dbService.CheckImportStatusAsync(filePath);
-                if (status == 1) return; // Đã nạp thành công ở chính path này rồi.
-                if (status == 2) 
+                // 1. Kiểm tra trạng thái nạp file bằng Path tệp chuẩn.
+                if (await _dbService.IsFileImportedAsync(filePath)) 
                 {
-                    await _dbService.UpdateHistoryPathAsync(filePath);
+                    Log($"[BỎ QUA] Tệp đã được nạp từ trước: {fileName}");
                     return;
                 }
 
@@ -379,8 +366,8 @@ namespace ImportData
 
                 Log($"[ĐANG NẠP] Xử lý tệp: {fileName}");
 
-                // 3. Đọc dữ liệu Excel.
-                var data = _excelService.ReadExcelFile(filePath);
+                // 3. Đọc dữ liệu Excel bọc trong Task.Run để giải phóng Thread UI (chống Not Responding).
+                var data = await Task.Run(() => _excelService.ReadExcelFile(filePath));
                 if (data == null || data.Rows.Count == 0) return; 
 
                 // 4. Nhập hàng loạt vào SQL.
@@ -389,6 +376,10 @@ namespace ImportData
             catch (Exception ex)
             {
                 Log($"[LỖI] Xử lý {fileName} bị dừng giữa chừng: {ex.Message}"); 
+            }
+            finally
+            {
+                _fileLock.Release(); // Xử lý xong thì trả chìa khóa cho thằng tiếp theo.
             }
         }
 
